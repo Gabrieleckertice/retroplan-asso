@@ -27,6 +27,41 @@ function ensureHelpButton() {
   b.innerHTML = icon('aide') + '<span>Aide</span>'; bar.appendChild(b);
 }
 
+/* ---------- Prochains événements ---------- */
+const upcomingEvents = () => Object.values(S.events).filter(e => parseD(e.date) >= today()).sort((a, b) => parseD(a.date) - parseD(b.date));
+// L'événement à mettre en avant : celui du jour, sinon le prochain, sinon le plus récent
+function featuredEvent() {
+  const evs = Object.values(S.events), t0 = today();
+  return evs.find(e => parseD(e.date) === t0) || upcomingEvents()[0] || evs.sort((a, b) => parseD(b.date) - parseD(a.date))[0] || null;
+}
+const evHref = ev => 'evenement.html?id=' + encodeURIComponent(ev.id);
+function miniEventCard(ev) {
+  const s = stats(ev), c = countdown(ev), me = whoKey(getName());
+  const mine = me ? s.ts.filter(t => t.status !== 'done' && whoKey(t.who) === me).length : 0;
+  return `<a class="nextev" href="${evHref(ev)}"><span class="cd">${esc(c.text)}</span><strong>${esc(ev.name)}</strong>
+    <span class="small muted">${esc(fmtLong.format(parseD(ev.date)))}</span>
+    <span class="bar" aria-hidden="true"><span style="width:${s.pct}%;background:var(--done)"></span></span>
+    <span class="small">${s.done}/${s.total} faites${s.late ? ` · <span class="late">${s.late} en retard</span>` : ''}${mine ? ` · ${mine} pour toi` : ''}</span></a>`;
+}
+function nextEventsStrip(n = 3) {
+  const up = upcomingEvents().slice(0, n);
+  if (!up.length) return '';
+  return `<section class="nextevs" aria-labelledby="nx-t"><div class="cardhead"><h2 id="nx-t">Prochains événements</h2><a class="btn ghost sm" href="evenements.html">Tous les événements</a></div>
+    <div class="nextev-row">${up.map(miniEventCard).join('')}</div></section>`;
+}
+function heroEvent(ev) {
+  const s = stats(ev), c = countdown(ev), d = parseD(ev.date), t0 = today();
+  const label = d === t0 ? 'C’est aujourd’hui' : d > t0 ? 'Prochain événement' : 'Dernier événement';
+  const week = s.ts.filter(t => thisWeek(ev, t)).length;
+  return `<a class="hero card" href="${evHref(ev)}">
+    <div class="hero-top"><span class="eyebrow">${label}</span><span class="hero-cd">${esc(c.text)}</span></div>
+    <h2 class="hero-name">${esc(ev.name)}</h2>
+    <div class="small muted">${esc(fmtLong.format(d))}${ev.lieu ? ' · ' + esc(ev.lieu) : ''}</div>
+    <div class="bar" aria-hidden="true"><span style="width:${s.pct}%;background:var(--done)"></span></div>
+    <div class="row small"><span class="mono">${s.done}/${s.total} tâches faites</span>${s.late ? `<span class="chip late">${s.late} en retard</span>` : '<span class="chip done">À jour</span>'}${week ? `<span class="chip doing">${week} à faire cette semaine</span>` : ''}${ev._noDate ? '<span class="chip late">Date manquante</span>' : ''}</div>
+    <span class="btn primary">Ouvrir le rétroplanning</span></a>`;
+}
+
 /* ---------- Pages ---------- */
 // Une page = un fichier HTML ; chacun déclare la sienne dans <body data-page="…">
 const PAGE = document.body.dataset.page;
@@ -121,7 +156,7 @@ function restoreDrafts(d) {
 function renderFab() {
   let fab = $('.fab');
   const want = S.view === 'event' && !S.readOnly && ['dash', 'gantt', 'list'].includes(S.tab);
-  if (want && !fab) { fab = document.createElement('button'); fab.className = 'btn primary fab'; fab.dataset.act = 'new-task'; fab.dataset.edit = ''; fab.textContent = '+ Tâche'; document.body.appendChild(fab); }
+  if (want && !fab) { fab = document.createElement('button'); fab.className = 'btn primary fab'; fab.dataset.act = 'new-task'; fab.dataset.edit = ''; fab.setAttribute('aria-label', 'Ajouter une tâche'); fab.innerHTML = '<span aria-hidden="true">+</span><span class="fab-l"> Tâche</span>'; document.body.appendChild(fab); }
   if (!want && fab) fab.remove();
 }
 
@@ -132,7 +167,7 @@ function taskRow(ev, t, showEvent) {
     <input type="checkbox" class="check" id="chk-${ev.id}-${t.id}" aria-label="Marquer « ${esc(t.title)} » comme fait" data-act="toggle" ${ref} ${t.status === 'done' ? 'checked' : ''} ${S.readOnly ? 'disabled' : ''}>
     <div class="body" data-act="edit-task" ${ref}>
       <div class="title">${esc(t.title)}</div>
-      <div class="sub">${showEvent ? `<span class="evtag">${esc(ev.name)}</span>` : ''}<span class="mono">${jLabel(t.offset)}</span><span class="${late ? 'late' : ''}">${esc(fmtShort.format(dueOf(ev, t)))}${late ? ' · en retard' : ''}</span>
+      <div class="sub">${showEvent ? `<span class="evtag">${esc(ev.name)}</span>` : ''}<span class="due${late ? ' late' : ''}">${esc(fmtShort.format(dueOf(ev, t)))}${late ? ' · en retard' : ''}</span><span class="mono">${jLabel(t.offset)}</span>
       <span><span class="dot" style="background:${esc(p.color)}"></span> ${esc(p.name)}</span>${t.who && !showEvent ? `<span>${esc(t.who)}</span>` : ''}
       ${steps.length ? `<span class="mono">${steps.filter(c => c.done).length}/${steps.length} étapes</span>` : ''}${t.vigil ? '<span class="vigil">Vigilance</span>' : ''}
       ${pre ? `<span class="late" title="Prévue avant sa tâche préalable">Avant « ${esc(pre.title.length > 32 ? pre.title.slice(0, 32) + '…' : pre.title)} »</span>` : ''}</div>
@@ -449,6 +484,10 @@ document.addEventListener('click', e => {
     case 'step-toggle': stepWrite(el.dataset.id, { done: el.checked }); break;
     case 'step-del': stepWrite(el.dataset.id, { deleted: true, text: '' }); break;
     case 'clear-filters': S.filters = { pole: '', who: '', status: '' }; render(); break;
+    case 'show-done': S.filters.status = 'all'; render(); break;
+    case 'gantt-move': S.ganttStart = ganttStart() + Number(el.dataset.d) * DAY; render(); break;
+    case 'gantt-today': S.ganttStart = today() - 2 * DAY; render(); break;
+    case 'gantt-j': { const e = S.events[S.current]; if (e) S.ganttStart = parseD(e.date) - 23 * DAY; render(); break; }
     case 'close': closeModal(); modalTask = null; break;
     case 'overlay': if (e.target === el && downEl === el) { closeModal(); modalTask = null; } break;
     case 'off': { const i = $('#tf-offset'); i.value = (parseInt(i.value, 10) || 0) + parseInt(el.dataset.d, 10); updateDue(); break; }
@@ -462,6 +501,7 @@ document.addEventListener('click', e => {
       break;
     }
     case 'help': openHelp(); break;
+    case 'theme': try { localStorage.setItem(THEME_KEY, el.dataset.v); } catch (_) {} applyTheme(el.dataset.v); render(); break;
     case 'guide-ok': try { localStorage.setItem(GUIDE_KEY, '1'); } catch (_) {} render(); toast('Tu retrouveras ces explications dans le bouton Aide'); break;
     case 'apply-tpl': { const add = tasksFromTemplate($('#apply-tpl').value); patchEvent(ev.id, { tasks: add }); toast(`${Object.keys(add).length} tâches ajoutées`); break; }
     case 'save-tpl': {

@@ -128,7 +128,10 @@ function viewList(ev) {
   // Le filtre regroupe les orthographes d'un même prénom (« Camille », « camille »)
   const names = new Map(knownPeople().map(p => [p.key, p.name]));
   const whos = [...new Set(all.map(t => whoKey(t.who)).filter(Boolean))].map(k => [k, names.get(k) || k]).sort((a, b) => a[1].localeCompare(b[1], 'fr'));
-  const ts = all.filter(t => (!f.pole || t.pole === f.pole) && (!f.who || whoKey(t.who) === f.who) &&(!f.status || (f.status === 'late' ? isLate(ev, t) : t.status === f.status)));
+  // Par défaut, seules les tâches qui restent à faire : c'est ce qu'on cherche en ouvrant la liste
+  const okStatus = t => f.status === 'all' ? true : !f.status ? t.status !== 'done' : f.status === 'late' ? isLate(ev, t) : t.status === f.status;
+  const ts = all.filter(t => (!f.pole || t.pole === f.pole) && (!f.who || whoKey(t.who) === f.who) && okStatus(t));
+  const hiddenDone = !f.status ? all.filter(t => t.status === 'done' && (!f.pole || t.pole === f.pole) && (!f.who || whoKey(t.who) === f.who)).length : 0;
   const groups = [];
   ts.forEach(t => {
     const d = dueOf(ev, t), dow = (new Date(d).getUTCDay() + 6) % 7, monday = d - dow * DAY;
@@ -138,39 +141,64 @@ function viewList(ev) {
   });
   const sel = (id, label, opts, val) => `<select id="${id}" data-act="filter" data-f="${id.slice(2)}" aria-label="${label}"><option value="">${label}</option>${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === val ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   return `<div class="filters">
+    ${sel('f-status', 'À faire et en cours', [['all', 'Toutes, même faites'], ['todo', 'À faire'], ['doing', 'En cours'], ['done', 'Faites'], ['late', 'En retard']], f.status)}
     ${sel('f-pole', 'Tous les pôles', S.poles.map(p => [p.id, p.name]), f.pole)}
-    ${sel('f-who', 'Tous les responsables', whos, f.who)}
-    ${sel('f-status', 'Tous les statuts', [['todo', 'À faire'], ['doing', 'En cours'], ['done', 'Fait'], ['late', 'En retard']], f.status)}
-    <span class="small muted mono">${ts.length} tâche${ts.length > 1 ? 's' : ''}</span>
+    ${sel('f-who', 'Tout le monde', whos, f.who)}
+    <span class="small muted">${ts.length} tâche${ts.length > 1 ? 's' : ''}${hiddenDone ? ` · ${hiddenDone} faite${hiddenDone > 1 ? 's' : ''} masquée${hiddenDone > 1 ? 's' : ''}` : ''}</span>
+    ${hiddenDone ? '<button class="btn ghost sm" data-act="show-done">Afficher les tâches faites</button>' : ''}
     ${f.pole || f.who || f.status ? '<button class="btn ghost sm" data-act="clear-filters">Effacer les filtres</button>' : ''}
   </div>
-  ${groups.length ? groups.map(g => `<div class="group card" style="padding:6px 16px"><h3 style="padding-top:8px">Semaine du ${esc(fmtShort.format(g.k))} · <span class="mono">${jLabel(Math.round((g.k - parseD(ev.date)) / DAY))}</span></h3><div class="tasks">${g.items.map(t => taskRow(ev, t)).join('')}</div></div>`).join('')
-    : '<div class="card empty"><p class="muted">Aucune tâche ne correspond à ces filtres.</p></div>'}`;
+  ${groups.length ? groups.map(g => `<section class="group"><h3>Semaine du ${esc(fmtShort.format(g.k))} · <span class="mono">${jLabel(Math.round((g.k - parseD(ev.date)) / DAY))}</span></h3><div class="tasks">${g.items.map(t => taskRow(ev, t)).join('')}</div></section>`).join('')
+    : `<div class="card empty"><p class="muted">${!f.status && hiddenDone ? 'Tout est fait pour ces filtres.' : 'Aucune tâche ne correspond à ces filtres.'}</p></div>`}`;
 }
 
-let G = { dw: 14, lw: 220 };
+// Frise sur un mois : une colonne par jour, de quoi voir réellement les prochaines missions
+let G = { dw: 30, lw: 200 };
+const GANTT_DAYS = 31;
+// Début de la fenêtre : deux jours avant aujourd'hui (on garde un œil sur ce qui vient de passer)
+const ganttStart = () => (S.ganttStart == null ? (S.ganttStart = today() - 2 * DAY) : S.ganttStart);
 function viewGantt(ev) {
-  const narrow = window.innerWidth < 640;
-  G = { dw: narrow ? 11 : 14, lw: narrow ? 130 : 230 };
-  const days = RANGE_MAX - RANGE_MIN + 1, W = days * G.dw, x = o => (o - RANGE_MIN) * G.dw;
-  const ts = tasksOf(ev), j = parseD(ev.date), tOff = Math.round((today() - j) / DAY);
-  let ticks = '';
-  for (let o = -84; o <= RANGE_MAX; o += 7) ticks += `<div class="tick" style="left:${x(o)}px"></div>`;
-  let labs = '';
-  for (let o = -84; o <= RANGE_MAX; o += 7) labs += `<div class="ticklab" style="left:${x(o)}px"><b>${jLabel(o)}</b>${esc(fmtDay.format(j + o * DAY))}</div>`;
-  const overlay = `<div class="jcol" style="left:${x(0)}px;width:${G.dw}px"></div>${tOff >= RANGE_MIN && tOff <= RANGE_MAX ? `<div class="today" style="left:${x(tOff) + G.dw / 2}px"></div>` : ''}`;
-  const rows = ts.map(t => {
-    const p = poleOf(t.pole), dur = Math.max(1, t.duration || 1);
-    const e = Math.min(RANGE_MAX, Math.max(RANGE_MIN, t.offset)), s = Math.min(e, Math.max(RANGE_MIN, t.offset - dur + 1));
+  // Téléphone : tout le mois tient dans la largeur (intitulés au-dessus des barres) ; ordinateur : colonne d'intitulés à gauche
+  const compact = window.innerWidth < 640, avail = Math.min(window.innerWidth, 1100) - 36;
+  G = compact ? { dw: Math.max(9, Math.floor((avail - 2) / GANTT_DAYS)), lw: 0 } : { dw: Math.max(24, Math.min(36, Math.floor((avail - 222) / GANTT_DAYS))), lw: 220 };
+  const t0 = ganttStart(), t1 = t0 + (GANTT_DAYS - 1) * DAY, W = GANTT_DAYS * G.dw;
+  const x = d => Math.round((d - t0) / DAY) * G.dw, j = parseD(ev.date), now = today();
+  let grid = '', labs = '';
+  for (let i = 0; i < GANTT_DAYS; i++) {
+    const d = t0 + i * DAY, dow = new Date(d).getUTCDay();
+    if (dow === 0 || dow === 6) grid += `<div class="wkend" style="left:${i * G.dw}px;width:${G.dw}px"></div>`;
+    if (dow === 1) grid += `<div class="tick" style="left:${i * G.dw}px"></div>`;
+    if (!compact || dow === 1 || d === now || d === j)
+      labs += `<div class="daylab${d === now ? ' isnow' : ''}${d === j ? ' isj' : ''}" style="left:${i * G.dw}px;width:${G.dw}px"><span>${'DLMMJVS'[dow]}</span><b>${new Date(d).getUTCDate()}</b></div>`;
+  }
+  grid += (j >= t0 && j <= t1 ? `<div class="jcol" style="left:${x(j)}px;width:${G.dw}px"></div>` : '') + (now >= t0 && now <= t1 ? `<div class="today" style="left:${x(now) + G.dw / 2}px"></div>` : '');
+  const shown = [], hidden = [];
+  for (const t of tasksOf(ev)) {
+    const e = dueOf(ev, t), s = e - (Math.max(1, t.duration || 1) - 1) * DAY;
+    (e >= t0 && s <= t1 ? shown : hidden).push(t);
+  }
+  const rows = shown.map(t => {
+    const p = poleOf(t.pole), due = dueOf(ev, t);
+    const e = Math.min(t1, due), s = Math.max(t0, due - (Math.max(1, t.duration || 1) - 1) * DAY), w = (Math.round((e - s) / DAY) + 1) * G.dw;
     const cls = (t.status === 'done' ? ' isdone' : '') + (isLate(ev, t) ? ' islate' : '');
-    return `<div class="grow"><div class="glabel" style="width:${G.lw}px" data-act="edit-task" data-id="${t.id}" title="${esc(t.title)}"><span class="dot" style="background:${esc(p.color)}"></span><span class="t">${esc(t.title)}</span></div>
-      <div class="gtrack" style="width:${W}px">${ticks}${overlay}<div class="gbar${cls}" data-id="${t.id}" style="left:${x(s)}px;width:${(e - s + 1) * G.dw}px;background:${esc(p.color)}">${(e - s + 1) * G.dw > 44 ? jLabel(t.offset) : ''}</div></div></div>`;
+    const label = compact
+      ? `<button class="glabel2" data-act="edit-task" data-id="${t.id}"><span class="dot" style="background:${esc(p.color)}"></span><span class="t">${esc(t.title)}</span><span class="due">${esc(fmtDay.format(due))}</span></button>`
+      : `<div class="glabel" style="width:${G.lw}px" data-act="edit-task" data-id="${t.id}" title="${esc(t.title)}"><span class="dot" style="background:${esc(p.color)}"></span><span class="t">${esc(t.title)}</span></div>`;
+    return `<div class="grow${compact ? ' col' : ''}">${label}
+      <div class="gtrack" style="width:${W}px">${grid}<div class="gbar${cls}" data-id="${t.id}" style="left:${x(s)}px;width:${w}px;background:${esc(p.color)}" title="${esc(t.title)} · ${esc(fmtShort.format(due))}">${!compact && w > 70 ? esc(fmtDay.format(due)) : ''}</div></div></div>`;
   }).join('');
-  return `<div class="gwrap"><div class="gantt">
-    <div class="ghead"><div class="glabel" style="width:${G.lw}px">Tâche</div><div class="gtrack" style="width:${W}px">${ticks}${overlay}${labs}${tOff >= RANGE_MIN && tOff <= RANGE_MAX ? `<div class="todaylab" style="left:${x(tOff) + G.dw / 2}px">aujourd’hui</div>` : ''}</div></div>
-    ${rows || `<div class="grow"><div class="glabel" style="width:${G.lw}px">Aucune tâche</div><div class="gtrack" style="width:${W}px">${ticks}${overlay}</div></div>`}
-  </div></div>
-  <p class="ghint">De J-90 à J+7. La colonne jaune est le jour J, la ligne bleue aujourd’hui. ${S.readOnly ? '' : 'Fais glisser une barre pour décaler une tâche, touche-la pour la modifier.'}</p>`;
+  const jOut = j < t0 || j > t1;
+  return `<div class="gnav">
+      <button class="btn sm" data-act="gantt-move" data-d="-30" aria-label="Mois précédent">←<span class="gnav-l"> Mois précédent</span></button>
+      <strong class="gnav-range">Du ${esc(fmtShort.format(t0))} au ${esc(fmtShort.format(t1))}</strong>
+      <button class="btn sm" data-act="gantt-move" data-d="30" aria-label="Mois suivant"><span class="gnav-l">Mois suivant </span>→</button>
+    </div>
+    <div class="row" style="margin-bottom:10px">${t0 !== today() - 2 * DAY ? '<button class="btn ghost sm" data-act="gantt-today">Revenir à aujourd’hui</button>' : ''}${jOut ? '<button class="btn ghost sm" data-act="gantt-j">Voir le mois du jour J</button>' : ''}</div>
+    <div class="gwrap"><div class="gantt${compact ? ' compact' : ''}">
+      <div class="ghead">${compact ? '' : `<div class="glabel" style="width:${G.lw}px">Tâche</div>`}<div class="gtrack" style="width:${W}px">${grid}${labs}</div></div>
+      ${rows || `<p class="muted small" style="padding:14px">Aucune tâche sur cette période. Utilise les flèches pour voir le mois suivant.</p>`}
+    </div></div>
+    <p class="ghint">${shown.length} tâche${shown.length > 1 ? 's' : ''} sur cette période${hidden.length ? `, ${hidden.length} autre${hidden.length > 1 ? 's' : ''} en dehors` : ''}. La ligne bleue est aujourd’hui${jOut ? '' : ', la colonne jaune le jour J'}. ${S.readOnly ? '' : 'Fais glisser une barre pour décaler une tâche, touche-la pour la modifier.'}</p>`;
 }
 function bindGantt() {
   const ev = S.events[S.current];
@@ -184,7 +212,7 @@ function bindGantt() {
       if (!active) return;
       moved = Math.round((e.clientX - sx) / G.dw);
       bar.style.left = (base + moved * G.dw) + 'px';
-      const t = ev.tasks[bar.dataset.id]; bar.textContent = parseFloat(bar.style.width) > 44 ? jLabel(t.offset + moved) : '';
+      const t = ev.tasks[bar.dataset.id]; bar.textContent = parseFloat(bar.style.width) > 70 ? fmtDay.format(dueOf(ev, t) + moved * DAY) : '';
     });
     const end = () => {
       if (!active) return; active = false; bar.classList.remove('dragging');

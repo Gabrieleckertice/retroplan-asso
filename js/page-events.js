@@ -13,11 +13,13 @@ function viewHome() {
       <div class="row small"><span class="mono">${s.done}/${s.total} faites</span>${s.late ? `<span class="chip late">${s.late} en retard</span>` : '<span class="chip done">À jour</span>'}${ev._noDate ? '<span class="chip late">Date manquante</span>' : ''}</div>
     </button>`;
   };
+  const top = featuredEvent(), rest = upcoming.filter(e => !top || e.id !== top.id);
   return `<div class="home-head"><div><span class="eyebrow">Rétroplannings de l’asso</span><h1>Événements</h1></div>
     <button class="btn primary" data-act="new-event" data-edit>+ Nouvel événement</button></div>
+    ${top ? heroEvent(top) : ''}
+    ${rest.length ? `<h2 style="margin:4px 0 12px">Ensuite</h2><div class="evgrid" style="margin-bottom:18px">${rest.map(card).join('')}</div>` : ''}
     ${viewLoad()}
-    <div class="evgrid">${upcoming.map(card).join('') || '<p class="muted">Aucun événement à venir.</p>'}</div>
-    ${past.length ? `<h2 style="margin:28px 0 12px">Passés</h2><div class="evgrid">${past.map(card).join('')}</div>` : ''}`;
+    ${past.filter(e => !top || e.id !== top.id).length ? `<h2 style="margin:28px 0 12px">Passés</h2><div class="evgrid">${past.filter(e => !top || e.id !== top.id).map(card).join('')}</div>` : ''}`;
 }
 
 /* ---------- Vue d'ensemble : charge par semaine ---------- */

@@ -1,3 +1,13 @@
+/* ---------- Apparence ---------- */
+// Claire par défaut ; « sombre » ou « auto » (suit l'appareil) se choisissent dans Paramètres
+const THEME_KEY = 'retroplan-theme';
+const getTheme = () => { try { return localStorage.getItem(THEME_KEY) || 'light'; } catch (e) { return 'light'; } };
+function applyTheme(t = getTheme()) {
+  const r = document.documentElement; if (!r) return;
+  if (t === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', t);
+}
+applyTheme();
+
 
 /* ---------- Données de base ---------- */
 const DAY = 86400000;

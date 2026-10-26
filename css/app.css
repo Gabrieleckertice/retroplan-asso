@@ -1,6 +1,6 @@
 /* Layout : barre d'app fixe, en-tête d'événement avec compte à rebours J-x, onglets, contenu en une colonne (2 sur grand écran). */
 :root{
-  --bg:#EEF1F8; --surface:#FFFFFF; --sunk:#E6EAF3; --ink:#141B2D; --muted:#4F586C; --line:#D5DBE7;
+  --bg:#F6F8FD; --surface:#FFFFFF; --sunk:#EDF0F7; --ink:#141B2D; --muted:#4F586C; --line:#D5DBE7;
   --accent:#3346D3; --accent-soft:#E3E7FF; --on-accent:#FFFFFF; --mark:#FFC94A;
   --late:#B8232E; --late-soft:#FCE6E7; --doing:#8A4F00; --doing-soft:#FFF0D6; --done:#136A41; --done-soft:#DDF3E8;
   --f-display:"Avenir Next", "Segoe UI Variable Display", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -8,10 +8,10 @@
   --f-mono:ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
   --r:16px; --shadow:0 1px 2px rgba(20,27,45,.06), 0 10px 30px rgba(31,40,90,.10);
   /* Verre dépoli : surfaces translucides, bordure claire, reflet en haut */
-  --glass:rgba(255,255,255,.58); --glass-strong:rgba(255,255,255,.86); --glass-border:rgba(255,255,255,.75);
+  --glass:rgba(255,255,255,.66); --glass-strong:rgba(255,255,255,.9); --glass-border:rgba(255,255,255,.75);
   --glass-hi:inset 0 1px 0 rgba(255,255,255,.9); --blur:saturate(170%) blur(18px);
   /* Fond « aurore » : trois halos doux derrière le verre */
-  --aura-1:rgba(51,70,211,.30); --aura-2:rgba(255,201,74,.32); --aura-3:rgba(30,148,104,.22);
+  --aura-1:rgba(51,70,211,.20); --aura-2:rgba(255,201,74,.26); --aura-3:rgba(30,148,104,.14);
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0B0F1A; --surface:#161B29; --sunk:#1E2435; --ink:#ECEFF6; --muted:#A3ACBF; --line:#2C3349;
@@ -389,3 +389,142 @@ input[type=text],input[type=url],input[type=number],input[type=date],select,text
 .gloss dt{font-weight:800}
 .gloss dd{margin:2px 0 0;color:var(--muted)}
 .field-help{font-size:.85rem;color:var(--muted);font-weight:400;margin-top:2px}
+
+/* ================= Prochains événements et événement mis en avant (CSS rédigé par Gemini 3.8 Flash, relu) ================= */
+.nextevs { margin-bottom: 18px; }
+.nextevs .cardhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+
+.nextev-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(240px, 82%);
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 6px;
+  scrollbar-width: none;
+}
+
+@media (min-width: 720px) {
+  .nextev-row {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+  }
+}
+
+a.nextev {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: var(--r);
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-hi), var(--shadow);
+  color: var(--ink);
+  text-decoration: none;
+  scroll-snap-align: start;
+  transition: transform 0.15s;
+}
+
+a.nextev:hover,
+a.nextev:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.nextev strong { font-size: 1.05rem; line-height: 1.25; }
+.nextev .cd {
+  align-self: flex-start;
+  font-family: var(--f-mono);
+  font-weight: 700;
+  font-size: 0.8rem;
+  background: var(--mark);
+  color: #141B2D;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+.nextev .bar { height: 6px; }
+.nextev .late { color: var(--late); font-weight: 700; }
+
+a.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  margin-bottom: 18px;
+  text-decoration: none;
+  color: var(--ink);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-strong);
+  box-shadow: inset 5px 0 0 var(--accent), var(--glass-hi), var(--shadow);
+  transition: transform 0.15s;
+}
+
+a.hero:hover { transform: translateY(-2px); }
+
+.hero-top { display: flex; justify-content: space-between; align-items: center; }
+.hero-cd { font-family: var(--f-mono); font-weight: 800; font-size: clamp(1.8rem, 7vw, 2.6rem); line-height: 1; color: var(--accent); }
+.hero-name { font-family: var(--f-display); font-size: clamp(1.4rem, 5vw, 1.9rem); font-weight: 800; margin: 0; }
+.hero .bar { height: 10px; }
+.hero .btn { align-self: flex-start; }
+
+@media (prefers-reduced-motion: reduce) {
+  a.nextev,
+  a.hero {
+    transition: none;
+    transform: none;
+  }
+  a.nextev:hover,
+  a.nextev:focus-visible,
+  a.hero:hover {
+    transform: none;
+  }
+}
+
+/* ================= Tâches : une case par tâche, bien espacée ================= */
+.tasks{display:flex;flex-direction:column;gap:10px}
+.task,.task:first-child{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface);box-shadow:0 1px 2px rgba(20,27,45,.05)}
+.task .title{font-size:1.03rem;line-height:1.35}
+.task .sub{margin-top:5px;gap:6px 12px}
+.task .due{font-weight:700;color:var(--ink)}
+.task .due.late{color:var(--late)}
+.task.isdone{opacity:.72}
+.task .check{width:28px;height:28px}
+.group{margin-bottom:22px}
+.group h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 2px 10px;font-family:var(--f-body)}
+.card .tasks{margin-top:4px}
+
+/* ================= Frise sur un mois ================= */
+.gnav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.gnav-range{font-size:.95rem;text-align:center}
+.ghead .gtrack{height:50px}
+.daylab{position:absolute;top:6px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.66rem;color:var(--muted);line-height:1.1}
+.daylab b{font-family:var(--f-mono);font-size:.82rem;color:var(--ink)}
+.daylab.isnow b{background:var(--accent);color:var(--on-accent);border-radius:999px;padding:1px 5px}
+.daylab.isj b{background:var(--mark);color:#141B2D;border-radius:6px;padding:1px 5px}
+.wkend{position:absolute;top:0;bottom:0;background:var(--sunk);opacity:.6;pointer-events:none}
+.gbar{top:7px;height:24px;border-radius:7px}
+@media (max-width:520px){.gnav-l{display:none}.gnav-range{font-size:.85rem}}
+
+/* Téléphone : filtres compacts sur deux colonnes, bouton d'ajout rond qui ne cache pas les tâches */
+@media (max-width:560px){
+  .filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .filters #f-status{grid-column:1 / -1}
+  .filters > span,.filters > .btn{grid-column:1 / -1;justify-self:start}
+  .fab{width:56px;height:56px;min-height:56px;padding:0;border-radius:50%;font-size:1.7rem;line-height:1}
+  .fab .fab-l{display:none}
+}
+
+/* Frise compacte (téléphone) : le mois entier dans la largeur, intitulé au-dessus de chaque barre */
+.grow.col{flex-direction:column;border-top:1px solid var(--line)}
+.grow.col .gtrack{height:32px;border-bottom:0}
+.glabel2{display:flex;align-items:center;gap:6px;width:100%;padding:8px 10px 0;background:none;border:0;color:var(--ink);font-size:.86rem;font-weight:700;text-align:left;cursor:pointer;min-height:32px}
+.glabel2 .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.glabel2 .due{font-family:var(--f-mono);font-size:.75rem;color:var(--muted);font-weight:500;flex:none}
+@media (max-width:640px){.daylab{width:auto!important;min-width:18px;transform:translateX(-25%)}}
+.gantt.compact{grid-template-columns:minmax(0,1fr)}
+.gantt.compact .grow.col,.gantt.compact .ghead{min-width:0}

@@ -17,6 +17,11 @@ function viewSettings() {
       <div class="row"><button class="btn primary" data-act="copy-invite">Copier le lien</button>${navigator.share ? '<button class="btn" data-act="share-invite">Partager…</button>' : ''}</div>
     </section>` : ''}
     <section class="card stack">
+      <h2>Apparence</h2>
+      <p class="small muted">Claire par défaut. « Automatique » suit le réglage de ton téléphone ou de ton ordinateur.</p>
+      <div class="seg" role="group" aria-label="Apparence">${[['light', 'Claire'], ['dark', 'Sombre'], ['auto', 'Automatique']].map(([v, l]) => `<button type="button" data-act="theme" data-v="${v}" aria-pressed="${getTheme() === v}">${l}</button>`).join('')}</div>
+    </section>
+    <section class="card stack">
       <h2>Installer sur cet appareil</h2>
       <p class="small muted">Une fois installée, l’app a son icône sur l’écran d’accueil et s’ouvre en plein écran, même sans réseau.</p>
       ${install}
