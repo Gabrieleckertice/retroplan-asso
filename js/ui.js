@@ -89,7 +89,7 @@ function viewSetup() {
     <form id="connect-form" class="stack">
       <label class="f">Adresse du serveur de l’asso<input type="url" id="cx-api" required inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(f.api || '')}"><span class="field-help">Une adresse qui commence par https://script.google.com. Le bureau te la donne.</span></label>
       <label class="f">Code d’accès<input type="text" id="cx-code" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="10 caractères, ex. K7P2Q-X4M9R" value="${esc(f.code || '')}"><span class="field-help">Le mot de passe commun de l’asso. Majuscules et tiret facultatifs.</span></label>
-      <label class="f">Ton prénom<input type="text" id="cx-name" autocomplete="given-name" placeholder="Ex. Eline" value="${esc(getName())}"><span class="field-help">Il signe tes modifications, pour que le bureau sache qui a fait quoi.</span></label>
+      <label class="f">Ton prénom<input type="text" id="cx-name" autocomplete="given-name" placeholder="Ex. Camille" value="${esc(getName())}"><span class="field-help">Il signe tes modifications, pour que le bureau sache qui a fait quoi.</span></label>
       <div><button class="btn primary" type="submit" id="cx-go">Se connecter</button></div>
     </form></div>`;
 }
