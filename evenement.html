@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Événement · Rétroplan Asso</title>
+<meta name="description" content="Rétroplanning d’un événement">
+<meta name="theme-color" content="#3346D3">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Rétroplan">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body data-page="event">
+<div class="wrap">
+  <header class="appbar">
+    <a class="brand" href="index.html" aria-label="Rétroplan, mes tâches">Rétroplan <span class="mono">J-60</span></a>
+    <span class="sp"></span>
+    <nav class="topnav" aria-label="Pages">
+      <a class="btn ghost sm" href="index.html" data-to="mes-taches">Mes tâches</a>
+      <a class="btn ghost sm" href="evenements.html" data-to="evenements" aria-current="page">Événements</a>
+      <a class="btn ghost sm" href="retours.html" data-to="retours">Retours d’expérience</a>
+      <a class="btn ghost sm" href="parametres.html" data-to="parametres">Paramètres</a>
+    </nav>
+  </header>
+  <div id="status" role="status" aria-live="polite" hidden></div>
+  <main id="app"><div class="card loading"><span class="spinner" aria-hidden="true"></span><span>Chargement…</span></div></main>
+</div>
+<!-- Barre de pages fixe en bas, sur téléphone -->
+<nav class="tabbar" aria-label="Pages">
+  <a href="index.html" data-to="mes-taches"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5.5-6"/></svg>Mes tâches</a>
+  <a href="evenements.html" data-to="evenements" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Événements</a>
+  <a href="retours.html" data-to="retours"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 21V4h11l-2 4 2 4h-11"/></svg>Retours</a>
+  <a href="parametres.html" data-to="parametres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>Paramètres</a>
+</nav>
+<div id="modal-root"></div>
+<div id="toast" class="toast" hidden></div>
+<script src="js/core.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/page-event.js"></script>
+<script src="js/boot.js"></script>
+</body>
+</html>
