@@ -1,7 +1,7 @@
 function viewEvent(ev) {
   const c = countdown(ev), tpl = templateList().find(t => t.id === ev.type);
   const nc = commentsOf(ev).length, nr = retexOf(ev).length;
-  const tabs = [['dash', 'Tableau de bord'], ['gantt', 'Frise'], ['list', 'Liste'], ['budget', 'Budget'], ['talk', 'Échanges' + (nc ? ` (${nc})` : '')], ['retex', 'Bilan' + (nr ? ` (${nr})` : '')], ['hist', 'Historique'], ['edit', 'Réglages']];
+  const tabs = [['dash', 'Résumé', 'resume'], ['list', 'Tâches', 'taches'], ['gantt', 'Frise', 'frise'], ['talk', 'Échanges' + (nc ? ` (${nc})` : ''), 'echanges'], ['budget', 'Budget', 'budget'], ['retex', 'Bilan' + (nr ? ` (${nr})` : ''), 'bilan'], ['hist', 'Historique', 'historique'], ['edit', 'Réglages', 'reglages']];
   const VIEWS = { gantt: viewGantt, list: viewList, edit: viewEventSettings, talk: viewTalk, retex: viewRetex, budget: viewBudget, hist: viewHist };
   const body = (VIEWS[S.tab] || viewDash)(ev);
   return `<div class="evhead"><div>
@@ -11,7 +11,7 @@ function viewEvent(ev) {
       ${ev._noDate ? '<p class="state bad" style="margin-top:10px"><span class="ic" aria-hidden="true"></span><span><strong>Date manquante</strong>Les échéances sont calculées à partir d’aujourd’hui. Fixe le jour J dans l’onglet Réglages.</span></p>' : ''}
       <div class="meta"><span>${esc(fmtLong.format(parseD(ev.date)))}</span>${ev.lieu ? `<span>${esc(ev.lieu)}</span>` : ''}${ev.budget ? `<span>Budget ${fmtEur.format(ev.budget)}</span>` : ''}<button class="btn ghost sm" data-act="ics-event" style="margin-left:-10px">Ajouter à mon agenda</button></div>
     </div><div class="count"><div class="n">${c.mark ? `<mark>${c.text}</mark>` : esc(c.text)}</div><div class="small muted">${esc(c.sub)}</div></div></div>
-    <nav class="tabs" role="tablist">${tabs.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${S.tab === k}" data-act="tab" data-tab="${k}" ${k === 'edit' ? 'data-edit' : ''}>${l}</button>`).join('')}</nav>
+    <nav class="tabs" role="tablist">${tabs.map(([k, l, ic]) => `<button class="tab" role="tab" aria-selected="${S.tab === k}" data-act="tab" data-tab="${k}" ${k === 'edit' ? 'data-edit' : ''}>${icon(ic)}<span>${l}</span></button>`).join('')}</nav>
     ${body}`;
 }
 

@@ -1,3 +1,32 @@
+/* ---------- Aide et prise en main ---------- */
+// Icônes des onglets et de l'aide : dessinées par Gemini 3.8 Flash, relues (traits seulement, couleurs gérées par le CSS)
+const ICONS = {"resume": "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" /><path d=\"M8 17v-4M12 17v-8M16 17v-5\" />", "taches": "<path d=\"m3 5 2 2 4-4M13 5h8M3 12 5 14 9 10M13 12h8M3 19 5 21 9 17M13 19h8\" />", "frise": "<line x1=\"3\" y1=\"4\" x2=\"3\" y2=\"20\" /><line x1=\"8\" y1=\"7\" x2=\"16\" y2=\"7\" /><line x1=\"12\" y1=\"12\" x2=\"20\" y2=\"12\" /><line x1=\"7\" y1=\"17\" x2=\"14\" y2=\"17\" />", "budget": "<circle cx=\"12\" cy=\"12\" r=\"9\" /><path d=\"M14.5 8.5A4.5 4.5 0 0 0 8 12a4.5 4.5 0 0 0 6.5 3.5M7 10.5h5M7 13.5h5\" />", "echanges": "<path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\" />", "bilan": "<line x1=\"4\" y1=\"2\" x2=\"4\" y2=\"22\" /><path d=\"M4 4h12l-2 5 2 5H4\" />", "historique": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /><polyline points=\"3 3 3 8 8 8\" /><polyline points=\"12 7 12 12 15 14\" />", "reglages": "<path d=\"M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4\" />", "aide": "<circle cx=\"12\" cy=\"12\" r=\"9\" /><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\" /><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"17\" />"};
+const icon = (k, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[k] || ''}</svg>`;
+// Textes de l'accueil et du lexique : rédigés par Gemini 3.8 Flash, relus et adaptés au club
+const GUIDE = [{"titre": "Coche tes tâches faites", "texte": "Quand une tâche est faite, coche simplement sa case à gauche. Elle est aussitôt marquée comme terminée pour toute l’équipe."}, {"titre": "Ouvre chaque tâche", "texte": "Touche une tâche pour voir son détail. Tu peux alors y ajouter des étapes ou la confier à un autre membre du club."}, {"titre": "Collabore avec le bureau", "texte": "Tout le bureau voit les changements en direct. Renseigne ton prénom pour que chacun sache qui prend en main chaque mission."}];
+const LEXIQUE = [{"terme": "Rétroplanning", "definition": "C’est le calendrier inversé de ton événement. Il liste tout ce qu’il faut préparer, en partant de la date de l’événement et en remontant le temps."}, {"terme": "Jour J", "definition": "C’est la date clé de ton tournoi ou de ta soirée de club. Toutes les échéances se calculent à partir de ce jour précis."}, {"terme": "J-30 / J+3", "definition": "C’est le repère par rapport au jour J. Par exemple, J-30 correspond à trente jours avant le tournoi et J+3 à trois jours après."}, {"terme": "Pôle", "definition": "C’est le groupe de travail en charge d’un sujet. Au club : Événementiel, Communication, Pôle sportif ou Partenariat."}, {"terme": "Statut", "definition": "C’est l’état d’une tâche à tout instant. Tu vois immédiatement si elle est à faire, en cours de réalisation ou terminée."}, {"terme": "Étapes", "definition": "Ce sont de petites actions découpées au sein d’une tâche. Elles t’aident à avancer pas à pas sans oublier aucun détail."}, {"terme": "Tâche préalable", "definition": "C’est une tâche qui doit être finie avant une autre. Par exemple, il faut réserver le gymnase avant de poser les affiches."}, {"terme": "Semaine chargée", "definition": "C’est une semaine où beaucoup de tâches tombent en même temps. Elle signale aux bénévoles qu’il faudra se serrer les coudes."}, {"terme": "Bilan", "definition": "C’est la mémoire de l’événement une fois terminé. Il sert à noter ce qui a coincé pour faire mieux l’année suivante."}, {"terme": "Code d’accès", "definition": "C’est le mot de passe commun de l’asso, fourni par le bureau. Il est souvent déjà inclus directement dans ton lien d’invitation."}, {"terme": "Lien d’invitation", "definition": "C’est le lien envoyé par le bureau pour rejoindre l’app. Il la relie directement à ton asso, sans créer de compte."}];
+const GUIDE_KEY = 'retroplan-guide-vu';
+const guideSeen = () => { try { return localStorage.getItem(GUIDE_KEY) === '1'; } catch (e) { return true; } };
+function guideSteps() { return `<ol>${GUIDE.map((g, i) => `<li><span class="num" aria-hidden="true">${i + 1}</span><span><strong>${esc(g.titre)}</strong>${esc(g.texte)}</span></li>`).join('')}</ol>`; }
+// Carte d'accueil, affichée tant qu'on ne l'a pas fermée
+function onboardCard() {
+  if (guideSeen()) return '';
+  return `<section class="onboard" aria-labelledby="ob-t"><div><span class="eyebrow">Première visite</span><h2 id="ob-t">Rétroplan en 3 gestes</h2></div>${guideSteps()}
+    <div class="row"><button class="btn primary" data-act="guide-ok">J’ai compris</button><button class="btn ghost" data-act="help">Voir le lexique</button></div></section>`;
+}
+function openHelp() {
+  modal(`<div class="stack"><h2>Aide</h2>
+    <h3>Rétroplan en 3 gestes</h3><div class="onboard" style="box-shadow:none;margin:0">${guideSteps()}</div>
+    <h3>Les mots de l’app</h3><dl class="gloss">${LEXIQUE.map(l => `<div><dt>${esc(l.terme)}</dt><dd>${esc(l.definition)}</dd></div>`).join('')}</dl>
+    <div class="actions"><span></span><button type="button" class="btn primary" data-act="close">Fermer</button></div></div>`);
+}
+// Bouton Aide, ajouté une fois dans la barre du haut de chaque page
+function ensureHelpButton() {
+  const bar = $('.appbar'); if (!bar || !bar.querySelector || bar.querySelector('.helpbtn')) return;
+  const b = document.createElement('button'); b.className = 'btn ghost sm helpbtn'; b.dataset.act = 'help'; b.setAttribute('aria-label', 'Aide');
+  b.innerHTML = icon('aide') + '<span>Aide</span>'; bar.appendChild(b);
+}
+
 /* ---------- Pages ---------- */
 // Une page = un fichier HTML ; chacun déclare la sienne dans <body data-page="…">
 const PAGE = document.body.dataset.page;
@@ -24,6 +53,7 @@ const loadingCard = msg => `<div class="card loading"><span class="spinner" aria
 /* ---------- Rendu ---------- */
 function render() {
   const app = $('#app'); if (!app) return;
+  ensureHelpButton();
   document.querySelectorAll('[data-to]').forEach(b => b.dataset.to === NAV_OF[PAGE] ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   if (S.mode === 'connecting') { app.innerHTML = loadingCard('Connexion à ton asso…'); return; }
   if (S.mode === 'setup') { app.innerHTML = viewSetup(); return; }
@@ -54,12 +84,12 @@ function viewSetup() {
   const f = S.inviteFailed || {};
   return `<div class="card stack pick">
     <span class="eyebrow">Bienvenue</span><h1>Relier l’app à ton asso</h1>
-    <p class="muted">Le plus simple : ouvre le <strong>lien d’invitation</strong> envoyé par le bureau, et c’est tout. Sinon, saisis l’adresse du serveur et le code d’accès de l’asso.</p>
+    <p class="muted">Le plus simple : ouvre le <strong>lien d’invitation</strong> envoyé par le bureau (WhatsApp, e-mail), et c’est tout. Tu n’as pas ce lien ? Demande-le à un membre du bureau. Sinon, saisis ci-dessous l’adresse et le code de l’asso.</p>
     ${S.connectError ? `<div class="notice bad" role="alert">${esc(S.connectError)}</div>` : ''}
     <form id="connect-form" class="stack">
-      <label class="f">Adresse du serveur de l’asso<input type="url" id="cx-api" required inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(f.api || '')}"></label>
-      <label class="f">Code d’accès<input type="text" id="cx-code" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="10 caractères, ex. K7P2Q-X4M9R" value="${esc(f.code || '')}"></label>
-      <label class="f">Ton prénom<input type="text" id="cx-name" autocomplete="given-name" placeholder="Il signe tes modifications" value="${esc(getName())}"></label>
+      <label class="f">Adresse du serveur de l’asso<input type="url" id="cx-api" required inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(f.api || '')}"><span class="field-help">Une adresse qui commence par https://script.google.com. Le bureau te la donne.</span></label>
+      <label class="f">Code d’accès<input type="text" id="cx-code" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="10 caractères, ex. K7P2Q-X4M9R" value="${esc(f.code || '')}"><span class="field-help">Le mot de passe commun de l’asso. Majuscules et tiret facultatifs.</span></label>
+      <label class="f">Ton prénom<input type="text" id="cx-name" autocomplete="given-name" placeholder="Ex. Eline" value="${esc(getName())}"><span class="field-help">Il signe tes modifications, pour que le bureau sache qui a fait quoi.</span></label>
       <div><button class="btn primary" type="submit" id="cx-go">Se connecter</button></div>
     </form></div>`;
 }
@@ -172,7 +202,7 @@ function openTask(ev, tid) {
       <div class="offs"><button type="button" class="btn sm" data-act="off" data-d="-7" ${ro}>−7</button><button type="button" class="btn sm" data-act="off" data-d="-1" ${ro}>−1</button>
       <input type="number" id="tf-offset" value="${t.offset}" aria-label="Décalage en jours" ${ro}>
       <button type="button" class="btn sm" data-act="off" data-d="1" ${ro}>+1</button><button type="button" class="btn sm" data-act="off" data-d="7" ${ro}>+7</button></div>
-      <span class="small muted" id="tf-due" style="font-weight:400"></span></div>
+      <span class="small muted" id="tf-due" style="font-weight:400"></span><span class="field-help">J-14 = 14 jours avant le jour J ; J+2 = 2 jours après. Les boutons −7 et +7 décalent d’une semaine.</span></div>
     <div class="grid2">
       <label class="f">Durée (jours)<input type="number" id="tf-dur" min="1" value="${t.duration || 1}" ${ro}></label>
       <label class="f">Pôle<select id="tf-pole" ${ro}>${S.poles.map(p => `<option value="${esc(p.id)}" ${p.id === t.pole ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}<option value="" ${!S.poles.some(p => p.id === t.pole) ? 'selected' : ''}>Sans pôle</option></select></label>
@@ -337,7 +367,13 @@ function runImport(mode) {
 
 /* ---------- Interactions ---------- */
 let toastTimer;
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200); }
+// Message bref en bas de l'écran ; avec « undo », un bouton Annuler permet de revenir en arrière pendant 6 secondes
+function toast(msg, undo) {
+  const t = $('#toast'); if (!t) return;
+  t.textContent = msg; t.hidden = false; clearTimeout(toastTimer);
+  if (undo) { const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Annuler'; b.onclick = () => { t.hidden = true; undo(); }; t.appendChild(b); }
+  toastTimer = setTimeout(() => { t.hidden = true; }, undo ? 6000 : 3200);
+}
 
 let downEl = null;
 document.addEventListener('pointerdown', e => { downEl = e.target; });
@@ -394,7 +430,13 @@ document.addEventListener('click', e => {
     case 'new-task': openTask(ev, null); break;
     // Sur « Mes tâches », chaque ligne indique son événement (data-ev)
     case 'edit-task': { const tev = S.events[el.dataset.ev] || ev; if (tev) openTask(tev, el.dataset.id); break; }
-    case 'toggle': { const tev = S.events[el.dataset.ev] || ev, t = tev && tev.tasks[el.dataset.id]; if (!t) break; patchEvent(tev.id, { tasks: { [t.id]: { status: el.checked ? 'done' : 'todo' } } }); break; }
+    case 'toggle': {
+      const tev = S.events[el.dataset.ev] || ev, t = tev && tev.tasks[el.dataset.id]; if (!t) break;
+      const before = t.status, after = el.checked ? 'done' : 'todo';
+      patchEvent(tev.id, { tasks: { [t.id]: { status: after } } });
+      toast(after === 'done' ? `« ${t.title} » est faite` : `« ${t.title} » est de nouveau à faire`, () => patchEvent(tev.id, { tasks: { [t.id]: { status: before } } }));
+      break;
+    }
     case 'cycle': { const tev = S.events[el.dataset.ev] || ev, t = tev && tev.tasks[el.dataset.id], order = ['todo', 'doing', 'done']; if (!t) break; patchEvent(tev.id, { tasks: { [t.id]: { status: order[(order.indexOf(t.status) + 1) % 3] } } }); break; }
     case 'load-week': S.loadOpen = S.loadOpen === +el.dataset.w ? null : +el.dataset.w; render(); break;
     case 'load-all': S.loadAll = !S.loadAll; render(); break;
@@ -413,7 +455,14 @@ document.addEventListener('click', e => {
     case 'set-status': document.querySelectorAll('#tf-status button').forEach(b => b.setAttribute('aria-pressed', b === el)); modalTask.t.status = el.dataset.s; break;
     case 'ask-del-task': $('#tf-del').innerHTML = `<div class="confirm">Supprimer cette tâche ? <button type="button" class="btn danger solid sm" data-act="del-task">Supprimer</button><button type="button" class="btn sm" data-act="cancel-del-task">Garder</button></div>`; break;
     case 'cancel-del-task': $('#tf-del').innerHTML = ''; break;
-    case 'del-task': patchEvent(modalTask.evId, { tasks: { [modalTask.t.id]: { deleted: true, note: '' } } }); closeModal(); modalTask = null; toast('Tâche supprimée'); break;
+    case 'del-task': {
+      const evId = modalTask.evId, prev = clone(S.events[evId].tasks[modalTask.t.id]);
+      patchEvent(evId, { tasks: { [prev.id]: { deleted: true, note: '' } } }); closeModal(); modalTask = null;
+      toast('Tâche supprimée', () => patchEvent(evId, { tasks: { [prev.id]: { ...prev, deleted: false } } }));
+      break;
+    }
+    case 'help': openHelp(); break;
+    case 'guide-ok': try { localStorage.setItem(GUIDE_KEY, '1'); } catch (_) {} render(); toast('Tu retrouveras ces explications dans le bouton Aide'); break;
     case 'apply-tpl': { const add = tasksFromTemplate($('#apply-tpl').value); patchEvent(ev.id, { tasks: add }); toast(`${Object.keys(add).length} tâches ajoutées`); break; }
     case 'save-tpl': {
       const name = $('#tpl-name').value.trim(); if (!name) { toast('Donne un nom au modèle.'); break; }
