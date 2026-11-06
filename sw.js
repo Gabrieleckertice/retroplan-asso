@@ -1,4 +1,4 @@
-const CACHE = 'retroplan-v5';
+const CACHE = 'retroplan-v6';
 
 const SHELL = [
   './',
@@ -26,7 +26,8 @@ const SHELL = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(SHELL))
+      // cache: 'reload' : on prend les fichiers sur le serveur, jamais une ancienne copie gardée par le navigateur
+      .then((cache) => cache.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });
@@ -55,7 +56,7 @@ self.addEventListener('fetch', (event) => {
   // Navigation : Réseau d'abord avec repli sur le cache (ou index.html)
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-cache' })
         .then(async (response) => {
           if (response.ok) {
             const cache = await caches.open(CACHE);
@@ -75,7 +76,8 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.open(CACHE).then(async (cache) => {
       const cached = await cache.match(request);
-      const networkFetch = fetch(request)
+      // no-cache : le navigateur redemande toujours au serveur (réponse légère si rien n'a changé)
+      const networkFetch = fetch(request, { cache: 'no-cache' })
         .then((response) => {
           if (response.ok) {
             cache.put(request, response.clone());
