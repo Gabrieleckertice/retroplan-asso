@@ -1,4 +1,4 @@
-const CACHE = 'retroplan-v4';
+const CACHE = 'retroplan-v5';
 
 const SHELL = [
   './',

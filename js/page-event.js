@@ -1,8 +1,8 @@
 function viewEvent(ev) {
   const c = countdown(ev), tpl = templateList().find(t => t.id === ev.type);
-  const nc = commentsOf(ev).length, nr = retexOf(ev).length;
-  const tabs = [['dash', 'Résumé', 'resume'], ['list', 'Tâches', 'taches'], ['gantt', 'Frise', 'frise'], ['talk', 'Échanges' + (nc ? ` (${nc})` : ''), 'echanges'], ['budget', 'Budget', 'budget'], ['retex', 'Bilan' + (nr ? ` (${nr})` : ''), 'bilan'], ['hist', 'Historique', 'historique'], ['edit', 'Réglages', 'reglages']];
-  const VIEWS = { gantt: viewGantt, list: viewList, edit: viewEventSettings, talk: viewTalk, retex: viewRetex, budget: viewBudget, hist: viewHist };
+  const nc = commentsOf(ev).length, nr = retexOf(ev).length, nl = lotsOf(ev).length;
+  const tabs = [['dash', 'Résumé', 'resume'], ['list', 'Tâches', 'taches'], ['gantt', 'Frise', 'frise'], ['talk', 'Échanges' + (nc ? ` (${nc})` : ''), 'echanges'], ['budget', 'Budget', 'budget'], ['lots', 'Lots' + (nl ? ` (${nl})` : ''), 'lots'], ['retex', 'Bilan' + (nr ? ` (${nr})` : ''), 'bilan'], ['hist', 'Historique', 'historique'], ['edit', 'Réglages', 'reglages']];
+  const VIEWS = { gantt: viewGantt, list: viewList, edit: viewEventSettings, talk: viewTalk, retex: viewRetex, budget: viewBudget, hist: viewHist, lots: viewLots };
   const body = (VIEWS[S.tab] || viewDash)(ev);
   return `<div class="evhead"><div>
       <button class="btn ghost sm" data-act="home" style="margin-left:-10px">← Tous les événements</button>
@@ -36,6 +36,29 @@ function viewBudget(ev) {
     <tr class="total"><td>Total<span class="gapline gap ${gapCls(actual, planned)}">Écart ${signedEur(actual - planned)}</span></td><td class="num">${eur(planned)}</td><td class="num">${eur(actual)}</td><td class="num gap gapcol ${gapCls(actual, planned)}">${signedEur(actual - planned)}</td></tr>
     </tbody></table></div>
     <p class="hint">Montants en euros${ro ? '' : ', enregistrés dès que tu quittes la case'}. Tout le bureau voit les mêmes chiffres. Un écart positif, en rouge, signale une dépense au-dessus du prévu.</p></section>`;
+}
+
+/* ---------- Lots ---------- */
+// Lots de tombola, de tournoi… : une carte par lot, la première photo en vignette
+function viewLots(ev) {
+  const lots = lotsOf(ev), ro = S.readOnly;
+  const ids = lots.flatMap(l => l.photos);
+  if (ids.length) setTimeout(() => fetchPhotos(ids), 0);
+  const head = `<div class="cardhead lotshead"><div><h2>Lots</h2><p class="small muted">Tombola, récompenses du tournoi, cadeaux des partenaires : chaque lot avec ses photos et qui l’a apporté.</p></div>
+    ${ro ? '' : '<button class="btn primary" data-act="new-lot" data-edit>Ajouter un lot</button>'}</div>`;
+  if (!lots.length) return `<section class="card">${head}<div class="empty"><p class="muted">Aucun lot pour l’instant.${ro ? '' : ' Ajoute le premier : un nom suffit, les photos sont facultatives.'}</p></div></section>`;
+  const donors = new Set(lots.map(l => whoKey(l.donor)).filter(Boolean)).size;
+  return `<section class="card">${head}
+    <p class="small muted lotcount">${lots.length} lot${lots.length > 1 ? 's' : ''}${donors ? ` · ${donors} donateur${donors > 1 ? 's' : ''}` : ''}</p>
+    <div class="lots">${lots.map(l => {
+      const src = l.photos.map(id => PH.get(id)).find(Boolean);
+      return `<button class="lot" data-act="open-lot" data-id="${l.id}">
+        <span class="lot-img">${src ? `<img src="${src}" alt="" loading="lazy">` : `<span class="lot-ph" aria-hidden="true">${icon('lots', 'ico big')}</span>`}${l.photos.length > 1 ? `<span class="lot-n">${l.photos.length} photos</span>` : ''}</span>
+        <span class="lot-body"><strong>${esc(l.name)}</strong>
+          ${l.desc ? `<span class="lot-desc">${esc(l.desc)}</span>` : ''}
+          ${l.donor ? `<span class="small">Offert par <strong>${esc(l.donor)}</strong></span>` : ''}
+          <span class="small muted">Ajouté par ${esc(l.by || 'quelqu’un')}${l.at ? `, ${esc(fmtDay.format(l.at))}` : ''}</span></span></button>`;
+    }).join('')}</div></section>`;
 }
 
 /* ---------- Historique ---------- */

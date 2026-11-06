@@ -1,6 +1,7 @@
 /* ---------- Aide et prise en main ---------- */
 // Icônes des onglets et de l'aide : dessinées par Gemini 3.8 Flash, relues (traits seulement, couleurs gérées par le CSS)
 const ICONS = {"resume": "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" /><path d=\"M8 17v-4M12 17v-8M16 17v-5\" />", "taches": "<path d=\"m3 5 2 2 4-4M13 5h8M3 12 5 14 9 10M13 12h8M3 19 5 21 9 17M13 19h8\" />", "frise": "<line x1=\"3\" y1=\"4\" x2=\"3\" y2=\"20\" /><line x1=\"8\" y1=\"7\" x2=\"16\" y2=\"7\" /><line x1=\"12\" y1=\"12\" x2=\"20\" y2=\"12\" /><line x1=\"7\" y1=\"17\" x2=\"14\" y2=\"17\" />", "budget": "<circle cx=\"12\" cy=\"12\" r=\"9\" /><path d=\"M14.5 8.5A4.5 4.5 0 0 0 8 12a4.5 4.5 0 0 0 6.5 3.5M7 10.5h5M7 13.5h5\" />", "echanges": "<path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\" />", "bilan": "<line x1=\"4\" y1=\"2\" x2=\"4\" y2=\"22\" /><path d=\"M4 4h12l-2 5 2 5H4\" />", "historique": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /><polyline points=\"3 3 3 8 8 8\" /><polyline points=\"12 7 12 12 15 14\" />", "reglages": "<path d=\"M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4\" />", "aide": "<circle cx=\"12\" cy=\"12\" r=\"9\" /><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\" /><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"17\" />"};
+ICONS.lots = '<rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5" />';
 const icon = (k, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[k] || ''}</svg>`;
 // Textes de l'accueil et du lexique : rédigés par Gemini 3.8 Flash, relus et adaptés au club
 const GUIDE = [{"titre": "Coche tes tâches faites", "texte": "Quand une tâche est faite, coche simplement sa case à gauche. Elle est aussitôt marquée comme terminée pour toute l’équipe."}, {"titre": "Ouvre chaque tâche", "texte": "Touche une tâche pour voir son détail. Tu peux alors y ajouter des étapes ou la confier à un autre membre du club."}, {"titre": "Collabore avec le bureau", "texte": "Tout le bureau voit les changements en direct. Renseigne ton prénom pour que chacun sache qui prend en main chaque mission."}];
@@ -167,7 +168,7 @@ function taskRow(ev, t, showEvent) {
     <input type="checkbox" class="check" id="chk-${ev.id}-${t.id}" aria-label="Marquer « ${esc(t.title)} » comme fait" data-act="toggle" ${ref} ${t.status === 'done' ? 'checked' : ''} ${S.readOnly ? 'disabled' : ''}>
     <div class="body" data-act="edit-task" ${ref}>
       <div class="title">${esc(t.title)}</div>
-      <div class="sub">${showEvent ? `<span class="evtag">${esc(ev.name)}</span>` : ''}<span class="due${late ? ' late' : ''}">${esc(fmtShort.format(dueOf(ev, t)))}${late ? ' · en retard' : ''}</span><span class="mono">${jLabel(t.offset)}</span>
+      <div class="sub">${showEvent ? `<span class="evtag">${esc(ev.name)}</span>` : ''}<span class="due${late ? ' late' : ''}">${esc(whenText(ev, t))}${late ? ' · en retard' : ''}</span><span class="mono">${jLabel(t.offset)}</span>
       <span><span class="dot" style="background:${esc(p.color)}"></span> ${esc(p.name)}</span>${t.who && !showEvent ? `<span>${esc(t.who)}</span>` : ''}
       ${steps.length ? `<span class="mono">${steps.filter(c => c.done).length}/${steps.length} étapes</span>` : ''}${t.vigil ? '<span class="vigil">Vigilance</span>' : ''}
       ${pre ? `<span class="late" title="Prévue avant sa tâche préalable">Avant « ${esc(pre.title.length > 32 ? pre.title.slice(0, 32) + '…' : pre.title)} »</span>` : ''}</div>
@@ -238,10 +239,16 @@ function openTask(ev, tid) {
       <input type="number" id="tf-offset" value="${t.offset}" aria-label="Décalage en jours" ${ro}>
       <button type="button" class="btn sm" data-act="off" data-d="1" ${ro}>+1</button><button type="button" class="btn sm" data-act="off" data-d="7" ${ro}>+7</button></div>
       <span class="small muted" id="tf-due" style="font-weight:400"></span><span class="field-help">J-14 = 14 jours avant le jour J ; J+2 = 2 jours après. Les boutons −7 et +7 décalent d’une semaine.</span></div>
-    <div class="grid2">
-      <label class="f">Durée (jours)<input type="number" id="tf-dur" min="1" value="${t.duration || 1}" ${ro}></label>
-      <label class="f">Pôle<select id="tf-pole" ${ro}>${S.poles.map(p => `<option value="${esc(p.id)}" ${p.id === t.pole ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}<option value="" ${!S.poles.some(p => p.id === t.pole) ? 'selected' : ''}>Sans pôle</option></select></label>
-    </div>
+    <div class="f" style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:.85rem">Durée
+      <div class="seg" id="tf-span"><button type="button" data-act="span" data-v="1" aria-pressed="${(t.duration || 1) <= 1}" ${ro}>Un seul jour</button><button type="button" data-act="span" data-v="n" aria-pressed="${(t.duration || 1) > 1}" ${ro}>Sur une période</button></div>
+      <input type="hidden" id="tf-dur" value="${t.duration || 1}">
+      <div id="tf-period" class="period" ${(t.duration || 1) > 1 ? '' : 'hidden'}>
+        <div class="grid2"><label class="f">Du<input type="date" id="tf-start" ${ro}></label><label class="f">Au (échéance)<input type="date" id="tf-end" ${ro}></label></div>
+        ${ro ? '' : `<div class="row small"><span class="muted" style="font-weight:400">Raccourcis :</span>${[[3, '3 jours'], [7, '1 semaine'], [14, '2 semaines'], [30, '1 mois']].map(([n, l]) => `<button type="button" class="btn ghost sm" data-act="span-len" data-n="${n}">${l}</button>`).join('')}</div>`}
+        <span class="small muted" id="tf-span-txt" style="font-weight:400"></span>
+      </div>
+      <span class="field-help">Facultatif. Une période sert aux tâches qui s’étalent (campagne d’affichage, inscriptions…). Elle finit à l’échéance et s’affiche en barre sur la frise.</span></div>
+    <label class="f">Pôle<select id="tf-pole" ${ro}>${S.poles.map(p => `<option value="${esc(p.id)}" ${p.id === t.pole ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}<option value="" ${!S.poles.some(p => p.id === t.pole) ? 'selected' : ''}>Sans pôle</option></select></label>
     <label class="f">Responsable<input type="text" id="tf-who" list="who-list" value="${esc(t.who)}" placeholder="Prénom" ${ro}><datalist id="who-list">${whos.map(w => `<option value="${esc(w)}">`).join('')}</datalist></label>
     <div class="f" style="display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:.85rem">Statut
       <div class="seg" id="tf-status">${Object.entries(STATUS).map(([k, l]) => `<button type="button" data-act="set-status" data-s="${k}" aria-pressed="${t.status === k}" ${ro}>${l}</button>`).join('')}</div></div>
@@ -268,6 +275,87 @@ function openNextEdition(ev) {
     ${nr ? `<label class="row small"><input type="checkbox" id="nx-rx" checked> Créer une tâche « point de vigilance » pour chacun des ${nr} problèmes notés dans le bilan</label>` : '<p class="hint">Aucun problème noté dans le bilan de cet événement.</p>'}
     <div class="actions"><button type="button" class="btn ghost" data-act="close">Annuler</button><button class="btn primary" type="submit">Créer l’édition suivante</button></div></form>`);
 }
+/* ---------- Lots ---------- */
+let modalLot = null;
+function openLot(ev, id) {
+  const cur = id && S.lots[id], isNew = !cur, ro = S.readOnly ? 'disabled' : '';
+  modalLot = { evId: ev.id, id: isNew ? uid() : id, isNew, photos: cur ? cur.photos.slice() : [], added: {}, busy: 0 };
+  modal(`<form id="lot-form" class="stack"><h2>${isNew ? 'Nouveau lot' : 'Lot'}</h2>
+    <label class="f">Nom du lot<input type="text" id="lf-name" required maxlength="120" value="${esc(cur ? cur.name : '')}" placeholder="Ex. Ballon de match dédicacé" ${ro}></label>
+    <label class="f">Description<textarea id="lf-desc" maxlength="2000" placeholder="Valeur, taille, conditions (bon valable jusqu’au…)" ${ro}>${esc(cur ? cur.desc : '')}</textarea></label>
+    <div class="f" style="display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:.85rem">Photos<div id="lf-photos"></div></div>
+    <div class="grid2">
+      <label class="f">Offert par<input type="text" id="lf-donor" maxlength="120" value="${esc(cur ? cur.donor : '')}" placeholder="Partenaire, commerçant… (facultatif)" ${ro}></label>
+      <label class="f">Ajouté par<input type="text" id="lf-by" required maxlength="60" value="${esc(cur ? cur.by : getName())}" placeholder="Ton prénom" ${ro}></label>
+    </div>
+    <div id="lf-del"></div>
+    <div class="actions">${!isNew && !S.readOnly ? '<button type="button" class="btn danger" data-act="ask-del-lot">Supprimer</button>' : '<span></span>'}
+      <div class="row"><button type="button" class="btn ghost" data-act="close">${S.readOnly ? 'Fermer' : 'Annuler'}</button>${S.readOnly ? '' : `<button class="btn primary" type="submit" id="lf-save">${isNew ? 'Ajouter le lot' : 'Enregistrer'}</button>`}</div></div>
+  </form>`);
+  drawLotPhotos();
+  const ids = modalLot.photos.filter(p => !PH.has(p)); if (ids.length) fetchPhotos(ids).then(drawLotPhotos);
+}
+function drawLotPhotos() {
+  const m = modalLot, box = $('#lf-photos'); if (!m || !box) return;
+  const src = id => m.added[id] || PH.get(id), ro = S.readOnly;
+  box.innerHTML = `<div class="lotpics">${m.photos.map((id, i) => `<div class="lotpic">${src(id) ? `<button type="button" class="lotpic-img" data-act="lot-zoom" data-id="${id}" aria-label="Agrandir la photo ${i + 1}"><img src="${src(id)}" alt="Photo ${i + 1} du lot"></button>` : '<span class="lotpic-wait">Chargement…</span>'}
+      ${ro ? '' : `<button type="button" class="btn sm iconbtn lotpic-x" data-act="lot-photo-del" data-id="${id}" aria-label="Retirer la photo ${i + 1}">✕</button>`}</div>`).join('')}
+    ${m.busy ? `<div class="lotpic"><span class="lotpic-wait"><span class="spinner" aria-hidden="true"></span></span></div>` : ''}</div>
+    ${ro || m.photos.length + m.busy >= MAX_LOT_PHOTOS ? '' : `<label class="btn sm lotpic-add">Ajouter des photos<input type="file" id="lf-file" accept="image/*" multiple hidden></label>`}
+    <span class="field-help">${MAX_LOT_PHOTOS} photos au plus. Elles sont réduites sur ton appareil avant l’envoi.</span>
+    <div id="lf-big"></div>`;
+}
+// Réduit une photo jusqu'à ce qu'elle tienne dans une cellule du classeur (40 000 caractères)
+function compressPhoto(file) {
+  return new Promise(resolve => {
+    if (!file || !/^image\//.test(file.type)) return resolve(null);
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas'), x = c.getContext('2d');
+        for (const side of [1024, 860, 720, 600, 480, 400, 320]) for (const q of [0.72, 0.6, 0.5]) {
+          const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+          c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+          x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+          const d = c.toDataURL('image/jpeg', q);
+          if (d.length <= 40000 && safePhoto(d)) { URL.revokeObjectURL(url); return resolve(d); }
+        }
+      } catch (e) {}
+      URL.revokeObjectURL(url); resolve(null);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+async function addLotPhotos(files) {
+  const m = modalLot; if (!m) return;
+  const room = MAX_LOT_PHOTOS - m.photos.length - m.busy, list = [...files].slice(0, Math.max(0, room));
+  if (files.length > list.length) toast(`${MAX_LOT_PHOTOS} photos au plus par lot.`);
+  m.busy += list.length; drawLotPhotos();
+  for (const f of list) {
+    const d = await compressPhoto(f);
+    if (modalLot !== m) return;                      // fenêtre fermée entre-temps
+    m.busy--;
+    if (d) { const id = uid(); m.added[id] = d; m.photos.push(id); } else toast('Cette image n’a pas pu être lue. Essaie une photo JPEG ou PNG.');
+    drawLotPhotos();
+  }
+}
+function saveLot() {
+  const m = modalLot, ev = m && S.events[m.evId]; if (!ev) return;
+  if (m.busy) { toast('Attends la fin de la préparation des photos.'); return; }
+  const name = $('#lf-name').value.trim(), by = $('#lf-by').value.trim(); if (!name || !by) return;
+  const cur = S.lots[m.id];
+  holdRender = true;
+  // Les photos partent avant le lot qui les cite ; celles retirées sont supprimées du classeur
+  m.photos.forEach(id => { if (m.added[id]) putPhoto(id, m.added[id], ev.id, m.id); });
+  if (cur) cur.photos.filter(id => !m.photos.includes(id)).forEach(dropPhoto);
+  if (m.isNew) { setName(by); logChanges(ev.id, [{ kind: 'lot', task: name }]); }
+  holdRender = false;
+  putDoc('lots', { ...(cur || {}), id: m.id, eventId: ev.id, name, desc: $('#lf-desc').value.trim(), donor: $('#lf-donor').value.trim(), by, photos: m.photos, at: cur ? cur.at : Date.now() });
+  closeModal(); modalLot = null;
+  toast(m.isNew ? `Lot « ${name} » ajouté` : 'Lot enregistré');
+}
+
 function showConflict(plan, cur, next) {
   const box = $('#tf-conflict');
   box.innerHTML = plan.gone
@@ -292,7 +380,7 @@ function takeTheirs() {
   toast('Sa version est reprise dans le formulaire. Vérifie, puis enregistre.');
 }
 function readTaskForm() {
-  return { title: $('#tf-title').value.trim(), offset: parseInt($('#tf-offset').value, 10) || 0, duration: Math.max(1, parseInt($('#tf-dur').value, 10) || 1),
+  return { title: $('#tf-title').value.trim(), offset: parseInt($('#tf-offset').value, 10) || 0, duration: Math.min(365, Math.max(1, parseInt($('#tf-dur').value, 10) || 1)),
     pole: $('#tf-pole').value, who: canonWho($('#tf-who').value), note: $('#tf-note').value, status: modalTask.t.status, after: $('#tf-after') ? $('#tf-after').value : '' };
 }
 function updateDue() {
@@ -300,6 +388,7 @@ function updateDue() {
   const ev = S.events[modalTask.evId]; if (!ev) return;
   const o = parseInt($('#tf-offset').value, 10) || 0;
   $('#tf-due').textContent = `${jLabel(o)} · ${fmtLong.format(parseD(ev.date) + o * DAY)}`;
+  drawPeriod(ev, o);
   // Ordre des tâches : prévenir tout de suite si l'échéance tombe avant la tâche préalable
   const hint = $('#tf-order'), pre = $('#tf-after') && ev.tasks[$('#tf-after').value];
   if (!hint) return;
@@ -309,6 +398,38 @@ function updateDue() {
   hint.textContent = bad ? `Attention : cette tâche est prévue avant « ${pre.title} » (${jLabel(pre.offset)}). Décale-la au moins à ${jLabel(pre.offset)}.`
     : `Prévue après « ${pre.title} » (${jLabel(pre.offset)}).`;
 }
+// Période : le début se déduit de l'échéance et de la durée (champ caché tf-dur), et inversement
+function drawPeriod(ev, o) {
+  const box = $('#tf-period'), durEl = $('#tf-dur'); if (!box || !durEl) return;
+  const dur = Math.min(365, Math.max(1, parseInt(durEl.value, 10) || 1)), end = parseD(ev.date) + o * DAY, start = end - (dur - 1) * DAY;
+  if (dur > 1 && box.hidden) setSpanMode(true);
+  const s = $('#tf-start'), e = $('#tf-end');
+  if (s && document.activeElement !== s) s.value = isoOf(start);
+  if (e && document.activeElement !== e) e.value = isoOf(end);
+  const txt = $('#tf-span-txt');
+  if (txt) txt.textContent = dur > 1 ? `${dur} jours, du ${fmtShort.format(start)} au ${fmtShort.format(end)}` : 'Début et fin le même jour : la tâche tient en un jour.';
+}
+function setSpanMode(on) {
+  const box = $('#tf-period'); if (!box) return;
+  box.hidden = !on;
+  document.querySelectorAll('#tf-span button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.v === 'n') === on)));
+}
+// Saisie d'une date de la période : la fin déplace l'échéance (le début reste fixe), le début change la durée
+function periodInput(which) {
+  const m = modalTask, ev = m && S.events[m.evId]; if (!ev) return;
+  const sEl = $('#tf-start'), eEl = $('#tf-end'), offEl = $('#tf-offset'), durEl = $('#tf-dur');
+  if (!isISODate(sEl.value) || !isISODate(eEl.value)) return;
+  let start = parseD(sEl.value), end = parseD(eEl.value);
+  if (which === 'end' && end < start) start = end;           // fin avant le début : le début suit
+  if (which === 'start' && start > end) end = start;         // début après la fin : la fin suit
+  const dur = Math.round((end - start) / DAY) + 1;
+  if (dur > 365) { toast('Une période dure au plus 365 jours.'); start = end - 364 * DAY; }
+  offEl.value = Math.round((end - parseD(ev.date)) / DAY);
+  durEl.value = Math.min(365, dur);
+  if (which === 'end') sEl.value = isoOf(start); else eEl.value = isoOf(end);
+  updateDue();
+}
+
 // Étapes : écrites tout de suite pour une tâche existante, gardées dans le formulaire pour une nouvelle tâche
 function stepWrite(id, patch) {
   const m = modalTask; if (!m) return;
@@ -488,8 +609,24 @@ document.addEventListener('click', e => {
     case 'gantt-move': S.ganttStart = ganttStart() + Number(el.dataset.d) * DAY; render(); break;
     case 'gantt-today': S.ganttStart = today() - 2 * DAY; render(); break;
     case 'gantt-j': { const e = S.events[S.current]; if (e) S.ganttStart = parseD(e.date) - 23 * DAY; render(); break; }
-    case 'close': closeModal(); modalTask = null; break;
-    case 'overlay': if (e.target === el && downEl === el) { closeModal(); modalTask = null; } break;
+    case 'close': closeModal(); modalTask = null; modalLot = null; break;
+    case 'overlay': if (e.target === el && downEl === el) { closeModal(); modalTask = null; modalLot = null; } break;
+    case 'new-lot': openLot(ev, null); break;
+    case 'open-lot': if (S.lots[el.dataset.id]) openLot(ev, el.dataset.id); break;
+    case 'lot-photo-del': if (modalLot) { modalLot.photos = modalLot.photos.filter(id => id !== el.dataset.id); drawLotPhotos(); } break;
+    case 'lot-zoom': { const big = $('#lf-big'), src = modalLot && (modalLot.added[el.dataset.id] || PH.get(el.dataset.id)); if (!big || !src) break;
+      big.innerHTML = big.dataset.id === el.dataset.id ? '' : `<img class="lotbig" src="${src}" alt="Photo agrandie">`; big.dataset.id = big.innerHTML ? el.dataset.id : ''; break; }
+    case 'ask-del-lot': $('#lf-del').innerHTML = `<div class="confirm">Supprimer ce lot et ses photos pour tout le bureau ? <button type="button" class="btn danger solid sm" data-act="del-lot">Supprimer</button><button type="button" class="btn sm" data-act="cancel-del-lot">Garder</button></div>`; break;
+    case 'cancel-del-lot': $('#lf-del').innerHTML = ''; break;
+    case 'del-lot': if (modalLot) { const n = S.lots[modalLot.id]?.name; removeLot(modalLot.id); closeModal(); modalLot = null; toast(n ? `Lot « ${n} » supprimé` : 'Lot supprimé'); } break;
+    case 'span': {
+      const on = el.dataset.v === 'n', d = $('#tf-dur');
+      setSpanMode(on);
+      // Passer en période propose une semaine ; revenir à un seul jour remet la durée à 1
+      if (!on) d.value = 1; else if ((parseInt(d.value, 10) || 1) <= 1) d.value = 7;
+      updateDue(); break;
+    }
+    case 'span-len': $('#tf-dur').value = el.dataset.n; updateDue(); break;
     case 'off': { const i = $('#tf-offset'); i.value = (parseInt(i.value, 10) || 0) + parseInt(el.dataset.d, 10); updateDue(); break; }
     case 'set-status': document.querySelectorAll('#tf-status button').forEach(b => b.setAttribute('aria-pressed', b === el)); modalTask.t.status = el.dataset.s; break;
     case 'ask-del-task': $('#tf-del').innerHTML = `<div class="confirm">Supprimer cette tâche ? <button type="button" class="btn danger solid sm" data-act="del-task">Supprimer</button><button type="button" class="btn sm" data-act="cancel-del-task">Garder</button></div>`; break;
@@ -530,6 +667,7 @@ document.addEventListener('change', e => {
     const cur = ev.budgetByPole && ev.budgetByPole[pole] ? ev.budgetByPole[pole][f] : 0;
     if (v !== cur) patchEvent(ev.id, { budgetByPole: { [pole]: { [f]: v } } });
   }
+  if (el.id === 'lf-file' && el.files && el.files.length) { addLotPhotos(el.files); }
   if (el.id === 'imp-file' && el.files && el.files[0]) {
     const f = el.files[0], reader = new FileReader();
     reader.onload = () => showImport(f.name, String(reader.result || ''));
@@ -542,9 +680,13 @@ document.addEventListener('change', e => {
   }
 });
 document.addEventListener('input', e => { if (e.target.id === 'tf-offset') updateDue(); });
-document.addEventListener('change', e => { if (e.target.id === 'tf-after') updateDue(); });
+document.addEventListener('change', e => {
+  if (e.target.id === 'tf-after') updateDue();
+  if (e.target.id === 'tf-start') periodInput('start');
+  if (e.target.id === 'tf-end') periodInput('end');
+});
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && $('#modal-root').innerHTML) { closeModal(); modalTask = null; }
+  if (e.key === 'Escape' && $('#modal-root').innerHTML) { closeModal(); modalTask = null; modalLot = null; }
   // Entrée dans « Nouvelle étape » ajoute l'étape au lieu d'enregistrer toute la tâche
   if (e.key === 'Enter' && e.target.id === 'step-new') { e.preventDefault(); $('[data-act="step-add"]').click(); }
 });
@@ -576,6 +718,7 @@ document.addEventListener('submit', e => {
     S.tab = 'dash'; putEvent(ev); logChanges(ev.id, [{ kind: 'event' }]); logChanges(src.id, [{ kind: 'next', task: name }]); go(ev.id);
     toast(`« ${name} » est prêt avec ${Object.keys(ev.tasks).length} tâches`);
   }
+  if (id === 'lot-form') { saveLot(); return; }
   if (id === 'task-form') {
     const m = modalTask, next = readTaskForm(); if (!next.title) return;
     const done = msg => { closeModal(); modalTask = null; toast(msg); };

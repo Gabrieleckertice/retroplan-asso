@@ -2,7 +2,7 @@
 // Les données vivent dans le Google Sheet de l'asso (script apps-script/Code.gs).
 // Chaque appareil garde une copie (pour s'ouvrir instantanément et hors connexion) et une file
 // des modifications pas encore envoyées, qui survit à la fermeture de l'app et au changement de page.
-const S = { mode: 'loading', events: {}, comments: {}, retex: {}, history: {}, names: {}, me: '', templates: {}, poles: DEFAULT_POLES, current: null, tab: 'dash', view: 'home', filters: { pole: '', who: '', status: '' }, readOnly: false };
+const S = { mode: 'loading', events: {}, comments: {}, retex: {}, history: {}, lots: {}, names: {}, me: '', templates: {}, poles: DEFAULT_POLES, current: null, tab: 'dash', view: 'home', filters: { pole: '', who: '', status: '' }, readOnly: false };
 let holdRender = false;
 const CFG_KEY = 'retroplan-connexion', CACHE_KEY = 'retroplan-copie', QUEUE_KEY = 'retroplan-envois';
 const readJSON = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
@@ -15,6 +15,7 @@ let rev = 0, queue = readJSON(QUEUE_KEY) || [];
 const STATES = {
   badcode: ['Code d’accès refusé', 'Le code de l’asso a peut-être changé. Ouvre Paramètres pour saisir le nouveau.', 'bad'],
   server: ['Le serveur de l’asso a répondu par une erreur', 'Tes modifications sont gardées sur cet appareil et seront renvoyées automatiquement.', 'bad'],
+  outdated: ['Le serveur de l’asso doit être mis à jour', 'Les lots ne peuvent pas encore être enregistrés. Le responsable de l’app doit recoller le script Google (voir MISE-EN-LIGNE.md).', 'bad'],
   big: ['Événement trop volumineux', 'Supprime des tâches inutiles ou des notes très longues, puis refais ta modification.', 'bad'],
   offline: ['Hors connexion', 'Tu peux continuer : tes modifications partiront dès le retour du réseau.', 'warn'],
   slow: ['Le chargement prend plus de temps que prévu', 'Vérifie ta connexion internet. Si rien ne s’affiche, recharge la page.', 'warn'],
@@ -37,7 +38,7 @@ function persist() {
 }
 function applyData(d) {
   S.events = toMap(d.events, normEvent); S.comments = toMap(d.comments, normComment); S.retex = toMap(d.retex, normRetex);
-  S.history = toMap(d.history, normHist); S.templates = toMap(d.templates, normTemplate); S.poles = normPoles(d.poles);
+  S.history = toMap(d.history, normHist); S.templates = toMap(d.templates, normTemplate); S.lots = toMap(d.lots, normLot); S.poles = normPoles(d.poles);
 }
 function loadCache() {
   const c = readJSON(CACHE_KEY);
@@ -55,7 +56,7 @@ async function api(payload, timeoutMs = 25000) {
   } finally { clearTimeout(timer); }
 }
 const pendingFor = (coll, id) => queue.some(o => o.coll === coll && o.id === id);
-const NORM = { comments: normComment, retex: normRetex, history: normHist, templates: normTemplate };
+const NORM = { comments: normComment, retex: normRetex, history: normHist, templates: normTemplate, lots: normLot };
 function applyDoc(d) {
   if (pendingFor(d.coll, d.id)) return;            // une modification locale pas encore envoyée a priorité
   if (d.coll === 'config') { if (d.id === 'poles' && !d.deleted && d.data) S.poles = normPoles(d.data.list); return; }
@@ -73,7 +74,10 @@ function scheduleRetry() { clearTimeout(retryTimer); retryTimer = setTimeout(() 
 async function flush() {
   if (!cfg || cfg.local || flushing || !queue.length) return;
   flushing = true;
-  const batch = queue.slice(0, 50);
+  // 50 modifications au plus par envoi, et pas plus d'environ 900 Ko (une photo pèse jusqu'à 40 Ko)
+  let n = 0, size = 0;
+  for (const o of queue) { const sz = JSON.stringify(o).length; if (n && (n >= 50 || size + sz > 900000)) break; n++; size += sz; }
+  const batch = queue.slice(0, n);
   let res;
   try { res = await api({ action: 'write', ops: batch }); }
   catch (e) { flushing = false; setState('offline', true); updateQueueState(); scheduleRetry(); return; }
@@ -90,13 +94,16 @@ async function flush() {
     if (r.ok) return;
     if (r.error === 'too_big') { toast('Une modification a été refusée : document trop volumineux.'); setState('big', true); }
     else if (r.error === 'missing') toast('Une modification n’a pas pu s’appliquer : l’élément a été supprimé par un autre membre.');
+    // Un serveur pas encore mis à jour refuse les collections qu'il ne connaît pas
+    else if (r.error === 'bad_request' && (r.coll === 'lots' || r.coll === 'photos')) setState('outdated', true);
+    else if (r.error === 'full' && r.coll === 'photos') toast('Photo refusée : le classeur de l’asso a atteint 3 000 photos.');
   });
   (res.docs || []).forEach(applyDoc);
   persist(); render();
   if (queue.length) flush();
 }
 function send(op) {
-  if (cfg && !cfg.local) { queue.push(op); writeJSON(QUEUE_KEY, queue); }
+  if (cfg && !cfg.local) { queue.push(op); if (!writeJSON(QUEUE_KEY, queue)) toast('Cet appareil manque de place : garde l’app ouverte jusqu’à l’envoi.'); }
   persist();
   flush();
 }
@@ -110,7 +117,7 @@ async function pull() {
     setState('offline', false);
     if (!res || !res.ok) { if (res && res.error === 'code') setState('badcode', true); else setState('server', true); return; }
     setState('badcode', false); setState('server', false);
-    if (rev === 0) { const keep = buildBackup(); applyData({ ...keep, events: {}, comments: {}, retex: {}, history: {}, templates: {} }); }
+    if (rev === 0) { const keep = buildBackup(); applyData({ ...keep, events: {}, comments: {}, retex: {}, history: {}, templates: {}, lots: {} }); }
     (res.docs || []).forEach(applyDoc);
     rev = num(res.rev, rev);
     if (!S.loaded) { S.loaded = true; setState('slow', false); }
@@ -171,6 +178,8 @@ function histLine(e) {
   if (e.kind === 'bulk') return `a ajouté ${e.n} tâches`;
   if (e.kind === 'event') return 'a créé l’événement';
   if (e.kind === 'next') return `a préparé l’édition suivante « ${e.task} »`;
+  if (e.kind === 'lot') return `a ajouté le lot « ${e.task} »`;
+  if (e.kind === 'lot-del') return `a supprimé le lot « ${e.task} »`;
   return histPhrase(e, { status: k => STATUS[k] || str(k), j: n => jLabel(num(n, 0)), day: iso => fmtShort.format(parseD(iso)) });
 }
 // Sans comptes : l'auteur est le prénom choisi sur l'appareil
@@ -178,6 +187,7 @@ const whoName = e => e.byName || 'Quelqu’un';
 function removeEvent(id) {
   holdRender = true;
   for (const coll of ['comments', 'retex', 'history']) Object.values(S[coll]).filter(d => d.eventId === id).forEach(d => delDoc(coll, d.id));
+  Object.values(S.lots).filter(l => l.eventId === id).forEach(l => removeLot(l.id, true));
   holdRender = false;
   delete S.events[id];
   send({ op: 'delete', coll: 'events', id });
@@ -199,6 +209,55 @@ function savePoles(list) {
   send({ op: 'set', coll: 'config', id: 'poles', data: { list } });
 }
 const saveTemplate = t => putDoc('templates', t);
+
+/* ---------- Photos des lots ---------- */
+// Les photos ne voyagent pas avec le reste : l'app les demande au serveur quand elle les affiche,
+// puis les garde sur l'appareil (IndexedDB), car une photo ne change jamais une fois envoyée.
+const PH = new Map(), phAsked = new Set();
+let idbP = null;
+function idb() {
+  if (!idbP) idbP = new Promise(res => {
+    try { const r = indexedDB.open('retroplan-photos', 1); r.onupgradeneeded = () => r.result.createObjectStore('p'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); }
+    catch (e) { res(null); }
+  });
+  return idbP;
+}
+async function idbPut(id, src) { const db = await idb(); if (!db) return; try { db.transaction('p', 'readwrite').objectStore('p').put(src, id); } catch (e) {} }
+async function idbGet(id) {
+  const db = await idb(); if (!db) return null;
+  return new Promise(res => { try { const r = db.transaction('p').objectStore('p').get(id); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); } catch (e) { res(null); } });
+}
+async function idbDel(id) { const db = await idb(); if (!db) return; try { db.transaction('p', 'readwrite').objectStore('p').delete(id); } catch (e) {} }
+// Va chercher les photos manquantes (appareil d'abord, serveur ensuite), puis redessine une seule fois
+async function fetchPhotos(ids) {
+  const want = ids.filter(id => !PH.has(id) && !phAsked.has(id));
+  if (!want.length) return;
+  want.forEach(id => phAsked.add(id));
+  let got = 0;
+  const miss = [];
+  for (const id of want) { const s = await idbGet(id); if (safePhoto(s)) { PH.set(id, s); got++; } else miss.push(id); }
+  if (miss.length && cfg && !cfg.local) for (let i = 0; i < miss.length; i += 24) {
+    try {
+      const res = await api({ action: 'photos', ids: miss.slice(i, i + 24) });
+      if (!res || !res.ok || !isObj(res.photos)) { miss.slice(i, i + 24).forEach(id => phAsked.delete(id)); continue; }
+      for (const [id, src] of Object.entries(res.photos)) if (safeId(id) && safePhoto(src)) { PH.set(id, src); idbPut(id, src); got++; }
+    } catch (e) { miss.slice(i, i + 24).forEach(id => phAsked.delete(id)); }   // réessaiera au prochain affichage
+  }
+  if (got) render();
+}
+function putPhoto(id, src, eventId, lotId) {
+  PH.set(id, src); idbPut(id, src);
+  send({ op: 'set', coll: 'photos', id, data: { src, eventId, lotId, at: Date.now() } });
+}
+function dropPhoto(id) { PH.delete(id); idbDel(id); send({ op: 'delete', coll: 'photos', id }); }
+function removeLot(id, quiet) {
+  const l = S.lots[id]; if (!l) return;
+  const was = holdRender; holdRender = true;
+  l.photos.forEach(dropPhoto);
+  if (!quiet) logChanges(l.eventId, [{ kind: 'lot-del', task: l.name }]);
+  holdRender = was;
+  delDoc('lots', id);
+}
 const removeTemplate = id => delDoc('templates', id);
 
 /* ---------- Connexion à l'asso ---------- */

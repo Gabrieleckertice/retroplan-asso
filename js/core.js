@@ -125,6 +125,11 @@ const fmtDay = mkFmt({ day: 'numeric', month: 'short', timeZone: 'UTC' });
 const fmtEur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 const jLabel = o => o === 0 ? 'J' : (o < 0 ? 'J' + o : 'J+' + o);
 const dueOf = (ev, t) => parseD(ev.date) + t.offset * DAY;
+// Une tâche sur une période commence (durée − 1) jours avant son échéance ; sans période, elle tient en un jour
+const startOf = (ev, t) => dueOf(ev, t) - (Math.max(1, t.duration || 1) - 1) * DAY;
+const isSpan = t => (t.duration || 1) > 1;
+// « 3 nov. → lun. 10 nov. » pour une période, la seule échéance sinon
+const whenText = (ev, t) => isSpan(t) ? `${fmtDay.format(startOf(ev, t))} → ${fmtShort.format(dueOf(ev, t))}` : fmtShort.format(dueOf(ev, t));
 const isLate = (ev, t) => t.status !== 'done' && dueOf(ev, t) < today();
 const thisWeek = (ev, t) => { const d = dueOf(ev, t), n = today(); return t.status !== 'done' && d >= n && d < n + 7 * DAY; };
 const tasksOf = ev => Object.values(ev.tasks || {}).filter(t => !t.deleted).sort((a, b) => a.offset - b.offset || a.title.localeCompare(b.title));
@@ -234,6 +239,18 @@ function normHist(h, id) {
   return { ...h, id, eventId: refId(h.eventId), taskId: refId(h.taskId), kind: str(h.kind), task: str(h.task), from: val(h.from), to: val(h.to),
     n: Math.max(0, num(h.n, 0)), uid: str(h.uid), byName: str(h.byName), at: num(h.at, 0) };
 }
+// Un lot (tombola, tournoi…) : nom, description, photos, qui l'a ajouté et qui l'a offert
+const MAX_LOT_PHOTOS = 6;
+function normLot(l, id) {
+  const photos = [...new Set((Array.isArray(l.photos) ? l.photos : []).filter(safeId))].slice(0, MAX_LOT_PHOTOS);
+  return { ...l, id, eventId: refId(l.eventId), name: str(l.name).trim() || 'Lot sans nom', desc: str(l.desc), by: str(l.by).trim(), donor: str(l.donor).trim(),
+    photos, at: num(l.at, 0), deleted: l.deleted === true };
+}
+const lotsOf = ev => Object.values(S.lots).filter(l => l.eventId === ev.id && !l.deleted).sort((a, b) => b.at - a.at || a.name.localeCompare(b.name, 'fr'));
+// Sécurité : seule une image JPEG, PNG ou WebP encodée s'affiche (jamais de SVG)
+const PHOTO_RE = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+const safePhoto = s => typeof s === 'string' && s.length <= 45000 && PHOTO_RE.test(s);
+
 function normTemplate(t, id) {
   const tasks = (Array.isArray(t.tasks) ? t.tasks : []).filter(isObj).map(x => ({ title: str(x.title).trim() || 'Tâche sans titre', offset: clampInt(x.offset, 0, -3650, 3650), duration: clampInt(x.duration, 1, 1, 365), pole: refId(x.pole), note: str(x.note) }));
   return { ...t, id, name: str(t.name).trim() || 'Modèle sans nom', tasks };
@@ -398,8 +415,8 @@ function buildICS(calName, items) {
 }
 function taskICSItem(ev, t) {
   const p = poleOf(t.pole);
-  return { uid: ev.id + '-' + t.id, start: dueOf(ev, t), days: 1, summary: `${t.title} · ${ev.name}`,
-    description: [`Échéance ${jLabel(t.offset)} de « ${ev.name} » (jour J : ${fmtLong.format(parseD(ev.date))})`, `Pôle : ${p.name}`, t.who && `Responsable : ${t.who}`, t.note].filter(Boolean).join('\n') };
+  return { uid: ev.id + '-' + t.id, start: startOf(ev, t), days: Math.max(1, t.duration || 1), summary: `${t.title} · ${ev.name}`,
+    description: [`Échéance ${jLabel(t.offset)} de « ${ev.name} » (jour J : ${fmtLong.format(parseD(ev.date))})`, isSpan(t) && `Période : ${t.duration} jours`, `Pôle : ${p.name}`, t.who && `Responsable : ${t.who}`, t.note].filter(Boolean).join('\n') };
 }
 const eventICSItems = ev => [{ uid: ev.id + '-jourj', start: parseD(ev.date), days: 1, summary: `Jour J · ${ev.name}`, description: ev.lieu ? 'Lieu : ' + ev.lieu : '' },
   ...tasksOf(ev).filter(t => t.status !== 'done').map(t => taskICSItem(ev, t))];
@@ -426,7 +443,7 @@ const fileSlug = s => str(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').to
 /* ---------- Sauvegarde ---------- */
 function buildBackup() {
   const pick = m => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, strip(v)]));
-  return { app: 'retroplan', format: SCHEMA, exportedAt: new Date().toISOString(), events: pick(S.events), comments: pick(S.comments), retex: pick(S.retex), history: pick(S.history), templates: pick(S.templates), poles: S.poles.map(strip) };
+  return { app: 'retroplan', format: SCHEMA, exportedAt: new Date().toISOString(), events: pick(S.events), comments: pick(S.comments), retex: pick(S.retex), history: pick(S.history), templates: pick(S.templates), lots: pick(S.lots), poles: S.poles.map(strip) };
 }
 function parseBackup(text) {
   let raw;
@@ -434,12 +451,12 @@ function parseBackup(text) {
   if (!isObj(raw) || raw.app !== 'retroplan' || !isObj(raw.events)) return { error: 'Ce fichier n’est pas une sauvegarde du Rétroplan.' };
   if (num(raw.format, 1) > SCHEMA) return { error: 'Cette sauvegarde vient d’une version plus récente de l’app. Mets l’app à jour avant de l’importer.' };
   return { data: { exportedAt: str(raw.exportedAt), events: toMap(raw.events, normEvent), comments: toMap(raw.comments, normComment), retex: toMap(raw.retex, normRetex), history: toMap(raw.history, normHist),
-    templates: toMap(raw.templates, normTemplate), poles: Array.isArray(raw.poles) && raw.poles.length ? normPoles(raw.poles) : null } };
+    templates: toMap(raw.templates, normTemplate), lots: toMap(raw.lots, normLot), poles: Array.isArray(raw.poles) && raw.poles.length ? normPoles(raw.poles) : null } };
 }
 // mode « add » : n'ajoute que les éléments absents ; mode « replace » : la sauvegarde remplace aussi les éléments de même identifiant
 function planImport(data, mode, cur) {
   const ops = []; let added = 0, replaced = 0, skipped = 0;
-  for (const coll of ['events', 'comments', 'retex', 'history', 'templates']) for (const [id, doc] of Object.entries(data[coll] || {})) {
+  for (const coll of ['events', 'comments', 'retex', 'history', 'templates', 'lots']) for (const [id, doc] of Object.entries(data[coll] || {})) {
     const exists = !!cur[coll][id];
     if (exists && mode !== 'replace') { if (coll === 'events') skipped++; continue; }
     ops.push({ coll, doc });
