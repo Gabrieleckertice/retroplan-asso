@@ -4,11 +4,13 @@
 // des modifications pas encore envoyées, qui survit à la fermeture de l'app et au changement de page.
 const S = { mode: 'loading', events: {}, comments: {}, retex: {}, history: {}, lots: {}, names: {}, me: '', templates: {}, poles: DEFAULT_POLES, current: null, tab: 'dash', view: 'home', filters: { pole: '', who: '', status: '' }, readOnly: false };
 let holdRender = false;
-const CFG_KEY = 'retroplan-connexion', CACHE_KEY = 'retroplan-copie', QUEUE_KEY = 'retroplan-envois';
+const CFG_KEY = 'retroplan-connexion', CACHE_KEY = 'retroplan-copie', QUEUE_KEY = 'retroplan-envois', PARK_KEY = 'retroplan-refuses', RESEND_KEY = 'retroplan-lots-renvoyes';
 const readJSON = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
 const writeJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
 let cfg = readJSON(CFG_KEY);          // { api, code, name } ; { local: true } = sans serveur (tests automatiques uniquement)
 let rev = 0, queue = readJSON(QUEUE_KEY) || [];
+// Lots et photos refusés par un serveur pas encore mis à jour : gardés ici et renvoyés plus tard, jamais jetés
+let parked = readJSON(PARK_KEY) || [], parkTry = 0;
 
 /* ---------- États affichés à l'utilisateur ---------- */
 // [titre, explication, ton] : une phrase qui dit ce qui se passe et quoi faire
@@ -55,7 +57,32 @@ async function api(payload, timeoutMs = 25000) {
     return await r.json();
   } finally { clearTimeout(timer); }
 }
-const pendingFor = (coll, id) => queue.some(o => o.coll === coll && o.id === id);
+const sameDoc = (a, b) => a.coll === b.coll && a.id === b.id;
+const pendingFor = (coll, id) => queue.some(o => o.coll === coll && o.id === id) || parked.some(o => o.coll === coll && o.id === id);
+function park(op) { parked = parked.filter(p => !sameDoc(p, op)); parked.push(op); writeJSON(PARK_KEY, parked); }
+// Remet les envois refusés dans la file (au plus toutes les 2 minutes) : un serveur mis à jour les accepte enfin
+function unpark() {
+  if (!parked.length || Date.now() - parkTry < 120000) return;
+  parkTry = Date.now();
+  parked.forEach(op => { if (!queue.some(o => sameDoc(o, op))) queue.push(op); });
+  parked = []; writeJSON(PARK_KEY, parked); writeJSON(QUEUE_KEY, queue);
+}
+// Les lots refusés restent visibles, même après un rechargement complet
+function showParked() { parked.forEach(op => { if (op.coll === 'lots' && op.op === 'set' && isObj(op.data)) { const n = normLot(clone(op.data), op.id); if (n) S.lots[op.id] = n; } }); }
+// Une seule fois par appareil : renvoie les lots (et leurs photos) que l'ancien serveur a pu refuser sans qu'on les garde
+async function resendLots() {
+  if (localStorage.getItem(RESEND_KEY)) return;
+  const lots = Object.values(S.lots).filter(l => !l.deleted);
+  for (const l of lots) {
+    for (const pid of l.photos) {
+      if (pendingFor('photos', pid)) continue;
+      const src = PH.get(pid) || await idbGet(pid);
+      if (src) park({ op: 'set', coll: 'photos', id: pid, data: { src, eventId: l.eventId, lotId: l.id, at: l.at || Date.now() } });
+    }
+    if (!pendingFor('lots', l.id)) { const { id, ...body } = strip(l); park({ op: 'set', coll: 'lots', id, data: body }); }
+  }
+  try { localStorage.setItem(RESEND_KEY, '1'); } catch (e) {}
+}
 const NORM = { comments: normComment, retex: normRetex, history: normHist, templates: normTemplate, lots: normLot };
 function applyDoc(d) {
   if (pendingFor(d.coll, d.id)) return;            // une modification locale pas encore envoyée a priorité
@@ -91,11 +118,15 @@ async function flush() {
   setState('server', false); setState('badcode', false);
   queue.splice(0, batch.length); writeJSON(QUEUE_KEY, queue);
   (res.results || []).forEach(r => {
-    if (r.ok) return;
+    if (r.ok) { if (r.coll === 'lots' || r.coll === 'photos') setState('outdated', false); return; }
     if (r.error === 'too_big') { toast('Une modification a été refusée : document trop volumineux.'); setState('big', true); }
     else if (r.error === 'missing') toast('Une modification n’a pas pu s’appliquer : l’élément a été supprimé par un autre membre.');
     // Un serveur pas encore mis à jour refuse les collections qu'il ne connaît pas
-    else if (r.error === 'bad_request' && (r.coll === 'lots' || r.coll === 'photos')) setState('outdated', true);
+    else if (r.error === 'bad_request' && (r.coll === 'lots' || r.coll === 'photos')) {
+      const op = batch.find(o => o.coll === r.coll && o.id === r.id);
+      if (op && !queue.some(o => sameDoc(o, op))) park(op);
+      setState('outdated', true);
+    }
     else if (r.error === 'full' && r.coll === 'photos') toast('Photo refusée : le classeur de l’asso a atteint 3 000 photos.');
   });
   (res.docs || []).forEach(applyDoc);
@@ -103,6 +134,7 @@ async function flush() {
   if (queue.length) flush();
 }
 function send(op) {
+  if (parked.some(p => sameDoc(p, op))) { parked = parked.filter(p => !sameDoc(p, op)); writeJSON(PARK_KEY, parked); }   // la nouvelle version remplace l'ancienne
   if (cfg && !cfg.local) { queue.push(op); if (!writeJSON(QUEUE_KEY, queue)) toast('Cet appareil manque de place : garde l’app ouverte jusqu’à l’envoi.'); }
   persist();
   flush();
@@ -119,9 +151,11 @@ async function pull() {
     setState('badcode', false); setState('server', false);
     if (rev === 0) { const keep = buildBackup(); applyData({ ...keep, events: {}, comments: {}, retex: {}, history: {}, templates: {}, lots: {} }); }
     (res.docs || []).forEach(applyDoc);
+    showParked();
     rev = num(res.rev, rev);
     if (!S.loaded) { S.loaded = true; setState('slow', false); }
     persist(); render();
+    await resendLots(); unpark(); if (queue.length) flush();
   } catch (e) { setState('offline', true); updateQueueState(); }
   finally { pulling = false; }
 }
@@ -298,7 +332,7 @@ async function connect(apiUrl, code) {
     return { ok: false, error: res && res.error === 'code' ? 'Code d’accès refusé. Vérifie-le auprès du bureau.' : 'Cette adresse ne répond pas comme le serveur Rétroplan.' };
   } catch (e) { cfg = prev; return { ok: false, error: 'Impossible de joindre cette adresse. Vérifie le lien et ta connexion internet.' }; }
 }
-function disconnect() { localStorage.removeItem(CFG_KEY); localStorage.removeItem(CACHE_KEY); localStorage.removeItem(QUEUE_KEY); cfg = null; queue = []; }
+function disconnect() { localStorage.removeItem(CFG_KEY); localStorage.removeItem(CACHE_KEY); localStorage.removeItem(QUEUE_KEY); localStorage.removeItem(PARK_KEY); cfg = null; queue = []; parked = []; }
 
 /* ---------- Démarrage de chaque page ---------- */
 async function boot() {
